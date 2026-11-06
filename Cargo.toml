@@ -49,23 +49,26 @@ humansize = "2.1.3"
 phf = { version = "0.14.0", default-features = false, features = ["macros"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 serde = { version = "1.0", features = ["derive"] }
-toml = { version = "1.1.8", default-features = false, features = ["parse", "serde", "std"] }
-unicode-width = "0.2.2"
+toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
+unicode-width = "0.2.3"
 which = "8.0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 crossterm = { version = "0.29.0", default-features = false, features = ["events", "windows"] }
-trash = { version = "5.2.9", default-features = false, features = ["coinit_apartmentthreaded"] }
+trash = { version = "5.3.0", default-features = false, features = ["coinit_apartmentthreaded"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 crossterm = { version = "0.29.0", default-features = false, features = ["events"] }
-trash = { version = "5.2.9", default-features = false }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 notify = { version = "8.2.1", default-features = true }
+trash = { version = "5.3.0", default-features = false }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify = { version = "8.2.1", default-features = false }
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+trash = { version = "5.3.0", default-features = false, features = ["freedesktop"] }
 
 [target.'cfg(unix)'.dependencies]
 uzers = { version = "0.12.2", default-features = false }
