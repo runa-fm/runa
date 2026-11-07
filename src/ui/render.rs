@@ -96,8 +96,11 @@ pub(crate) fn render(
             clipboard_style,
         );
 
+        let parent_entry = theme_cfg.parent().entry_style_or_theme();
+        fill_pane(frame, chunks[pane_idx], parent_entry);
+
         let parent_pane_style = PaneStyles::new(theme_cfg)
-            .with_entry(theme_cfg.parent().entry_style_or_theme())
+            .with_entry(parent_entry)
             .with_selection(theme_cfg.parent_selection_style());
 
         panes::draw_parent(
@@ -135,6 +138,8 @@ pub(crate) fn render(
             ""
         };
 
+        fill_pane(frame, chunks[pane_idx], theme_cfg.entry_style());
+
         panes::draw_main(
             frame,
             app,
@@ -164,9 +169,8 @@ pub(crate) fn render(
 
     // PREVIEW PANE
     if display_cfg.preview() && pane_idx < chunks.len() {
-        let area = chunks[pane_idx];
-        let bg_filler = Block::default().style(theme_cfg.preview().entry_style_or_theme());
-        frame.render_widget(bg_filler, area);
+        let preview_entry = theme_cfg.preview().entry_style_or_theme();
+        fill_pane(frame, chunks[pane_idx], preview_entry);
 
         let preview_dir = app.preview().current_path();
         let preview_markers = panes::make_pane_markers(
@@ -474,6 +478,12 @@ fn border_junctions(frame: &mut Frame, area: Rect, x: u16, border_type: BorderTy
         && cell.symbol() == horizontal_line
     {
         cell.set_symbol(bottom_sym).set_style(style);
+    }
+}
+
+fn fill_pane(frame: &mut Frame, area: Rect, style: Style) {
+    if style != Style::default() {
+        frame.render_widget(Block::default().style(style), area);
     }
 }
 

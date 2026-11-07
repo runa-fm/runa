@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use ansi_to_tui::IntoText;
+use ratatui::style::Color;
 use ratatui::text::Text;
 
 use crate::app::actions::ScrollState;
@@ -122,7 +123,10 @@ impl PreviewState {
                 PreviewLines::Text(lines) => {
                     let len = lines.len();
                     let raw = lines.join("\n");
-                    let text: Text<'static> = raw.into_text().unwrap_or_else(|_| Text::from(raw));
+                    let mut text: Text<'static> =
+                        raw.into_text().unwrap_or_else(|_| Text::from(raw));
+
+                    Self::clear_reset_colors(&mut text);
                     (PreviewData::File(text), len)
                 }
                 PreviewLines::Listing(rows) => {
@@ -266,6 +270,18 @@ impl PreviewState {
                 rows.drain(..skip);
             }
             PreviewData::Directory { .. } | PreviewData::Empty => {}
+        }
+    }
+
+    fn clear_reset_colors(text: &mut Text<'_>) {
+        for span in text.lines.iter_mut().flat_map(|line| line.spans.iter_mut()) {
+            if span.style.fg == Some(Color::Reset) {
+                span.style.fg = None;
+            }
+
+            if span.style.bg == Some(Color::Reset) {
+                span.style.bg = None;
+            }
         }
     }
 }

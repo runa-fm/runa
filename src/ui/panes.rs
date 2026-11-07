@@ -70,8 +70,8 @@ impl PaneStyles {
     }
 
     fn get_style(&self, is_dir: bool, is_selected: bool) -> Style {
-        let mut style = if is_dir && self.dir.fg != Some(Color::Reset) {
-            self.dir
+        let mut style = if is_dir {
+            self.item.patch(self.dir)
         } else {
             self.item
         };
@@ -563,11 +563,12 @@ fn make_entry_row<'a>(
     } else {
         markers.marker_style
     };
+
     if is_selected {
         let has_distinct_bg = icon_style.bg.is_some() && icon_style.bg != Some(Color::Reset);
 
-        if !has_distinct_bg {
-            icon_style = icon_style.bg(style.bg.unwrap_or_default());
+        if !has_distinct_bg && let Some(bg) = style.bg {
+            icon_style = icon_style.bg(bg);
         }
     }
 
@@ -580,8 +581,8 @@ fn make_entry_row<'a>(
     {
         row_style = row_style.patch(override_style);
 
-        if is_selected {
-            row_style = row_style.bg(style.bg.unwrap_or_default());
+        if is_selected && let Some(bg) = style.bg {
+            row_style = row_style.bg(bg);
         }
     }
 

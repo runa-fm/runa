@@ -259,10 +259,12 @@ impl Theme {
         {
             base.apply_user_overrides(self);
             base.build_style_maps();
+            base.inherit_pane_entries();
             return base;
         }
 
         self.build_style_maps();
+        self.inherit_pane_entries();
         self
     }
 
@@ -392,6 +394,11 @@ impl Theme {
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect();
+    }
+
+    fn inherit_pane_entries(&mut self) {
+        self.parent.inherit_theme(&self.entry);
+        self.preview.inherit_theme(&self.entry);
     }
 }
 

@@ -58,6 +58,10 @@ impl PaneTheme {
     pub(crate) fn entry_style_or_theme(&self) -> Style {
         self.color.style_or(&Theme::builtin().entry)
     }
+
+    pub(super) fn inherit_theme(&mut self, entry: &ColorPair) {
+        self.color = self.color.resolve(entry);
+    }
 }
 
 /// MarkerTheme struct to hold marker icon and colors.

@@ -72,8 +72,17 @@ impl ColorPair {
     }
 
     pub(super) fn style_or(&self, fallback: &ColorPair) -> Style {
-        let resovled = self.resolve(fallback);
-        Style::default().fg(resovled.fg).bg(resovled.bg)
+        let resolved = self.resolve(fallback);
+        let mut style = Style::default();
+        if resolved.fg != Color::Reset {
+            style = style.fg(resolved.fg);
+        }
+
+        if resolved.bg != Color::Reset {
+            style = style.bg(resolved.bg);
+        }
+
+        style
     }
 
     pub(super) fn fg_style(&self) -> Style {
