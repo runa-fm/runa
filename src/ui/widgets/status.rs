@@ -5,7 +5,7 @@ use std::time::Duration;
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
-    style::{Color, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Paragraph},
 };
@@ -44,16 +44,13 @@ pub(crate) fn draw_status_bar(
     let status_cfg = display_cfg.status();
     let theme = app.config().theme();
     let base_style = theme.status_line_style();
-    let status_bg = base_style.bg.unwrap_or(Color::Reset);
+    let status_bg = base_style.bg;
     let marker_theme = theme.marker();
     let use_icons = display_cfg.icons();
 
-    let patch_style = |s: Style| {
-        if s.bg == Some(Color::Reset) || s.bg.is_none() {
-            s.bg(status_bg)
-        } else {
-            s
-        }
+    let patch_style = |s: Style| match (s.bg, status_bg) {
+        (None, Some(bg)) => s.bg(bg),
+        _ => s,
     };
 
     let mut left_spans = Vec::with_capacity(12);

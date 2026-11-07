@@ -77,15 +77,11 @@ impl PaneStyles {
         };
 
         if is_selected {
-            if let Some(bg) = self.selection.bg
-                && bg != Color::Reset
-            {
+            if let Some(bg) = self.selection.bg {
                 style = style.bg(bg);
             }
 
-            if let Some(fg) = self.selection.fg
-                && fg != Color::Reset
-            {
+            if let Some(fg) = self.selection.fg {
                 style = style.fg(fg);
             }
         }
@@ -340,9 +336,12 @@ pub(super) fn draw_preview(
         } => {
             if entries.is_empty() {
                 let style = context.styles.item;
-                let line = Line::from(vec![Span::raw(context.padding_str), Span::raw("[Empty]")]);
+                let line = Line::from(vec![
+                    Span::raw(context.padding_str),
+                    Span::styled("[Empty]", style),
+                ]);
 
-                let items = vec![ListItem::new(line).style(style)];
+                let items = vec![ListItem::new(line)];
                 let mut state = ListState::default();
                 frame.render_stateful_widget(
                     List::new(items)
@@ -564,15 +563,20 @@ fn make_entry_row<'a>(
         markers.marker_style
     };
 
-    if is_selected {
-        let has_distinct_bg = icon_style.bg.is_some() && icon_style.bg != Some(Color::Reset);
-
-        if !has_distinct_bg && let Some(bg) = style.bg {
-            icon_style = icon_style.bg(bg);
-        }
+    if is_selected
+        && icon_style.bg.is_none()
+        && let Some(bg) = style.bg
+    {
+        icon_style = icon_style.bg(bg);
     }
 
     let mut row_style = style;
+
+    let mut bar_bg = if is_selected {
+        context.styles.selection.bg
+    } else {
+        None
+    };
 
     if let Some(override_style) =
         context
@@ -597,12 +601,9 @@ fn make_entry_row<'a>(
                 row_style = row_style.fg(color);
             }
         }
-        if let Some(bg) = opts
-            .underline_style
-            .bg
-            .filter(|&color| color != Color::Reset)
-        {
+        if let Some(bg) = opts.underline_style.bg {
             row_style = row_style.bg(bg);
+            bar_bg = Some(bg);
         }
     }
 
@@ -717,6 +718,11 @@ fn make_entry_row<'a>(
         }
     }
 
+    let bar_style = Style {
+        bg: bar_bg,
+        ..row_style
+    };
+
     if let Some(col) = right.text {
         let col_area_w = right.width as usize;
         let right_text = if UnicodeWidthStr::width(col) <= col_area_w {
@@ -726,10 +732,10 @@ fn make_entry_row<'a>(
             build_right_field(&col, total_w, used_w, col_area_w)
         };
 
-        spans.push(Span::styled(right_text, row_style));
+        spans.push(Span::styled(right_text, bar_style));
     }
 
-    ListItem::new(Line::from(spans)).style(row_style)
+    ListItem::new(Line::from(spans)).style(bar_style)
 }
 
 fn make_tree_row<'a>(
@@ -762,7 +768,7 @@ fn make_tree_row<'a>(
         }
         used_w += UnicodeWidthStr::width(icon) + 1;
         spans.push(Span::styled(icon, icon_style));
-        spans.push(Span::raw(" "));
+        spans.push(Span::styled(" ", style));
     }
 
     let total_w = pane_inner_width(context) as usize;
@@ -775,7 +781,7 @@ fn make_tree_row<'a>(
         spans.push(Span::styled("/", name_style));
     }
 
-    ListItem::new(Line::from(spans)).style(style)
+    ListItem::new(Line::from(spans)).style(Style { bg: None, ..style })
 }
 
 #[inline]

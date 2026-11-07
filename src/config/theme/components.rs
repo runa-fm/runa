@@ -31,8 +31,11 @@ enum SelectionMode {
 #[derive(Deserialize, Debug, PartialEq, Clone, Copy, Default)]
 #[serde(default)]
 pub(crate) struct PaneTheme {
-    #[serde(flatten)]
-    color: ColorPair,
+    #[serde(deserialize_with = "deserialize_color_field")]
+    bg: Color,
+    entry: ColorPair,
+    #[serde(deserialize_with = "deserialize_color_field")]
+    fg: Color,
     selection: Option<ColorPair>,
     selection_mode: SelectionMode,
 }
@@ -55,12 +58,21 @@ impl PaneTheme {
         }
     }
 
-    pub(crate) fn entry_style_or_theme(&self) -> Style {
-        self.color.style_or(&Theme::builtin().entry)
+    pub(crate) fn entry_style(&self) -> Style {
+        self.entry.style_or(&Theme::builtin().entry)
     }
 
-    pub(super) fn inherit_theme(&mut self, entry: &ColorPair) {
-        self.color = self.color.resolve(entry);
+    pub(crate) fn bg_style(&self) -> Style {
+        ColorPair::new(Color::Reset, self.bg).style_or(&ColorPair::default())
+    }
+
+    pub(super) fn inherit(&mut self, entry: &ColorPair, bg: Color) {
+        self.entry = self
+            .entry
+            .resolve(&ColorPair::new(self.fg, Color::Reset))
+            .resolve(entry);
+
+        self.bg = self.bg.or(bg);
     }
 }
 

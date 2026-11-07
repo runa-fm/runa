@@ -44,6 +44,8 @@ pub(crate) struct Theme {
     underline: ColorPair,
     accent: ColorPair,
     entry: ColorPair,
+    #[serde(deserialize_with = "deserialize_color_field")]
+    bg: Color,
     directory: ColorPair,
     separator: ColorPair,
     selection_icon: String,
@@ -80,6 +82,7 @@ impl Default for Theme {
             selection: ColorPair::new(Color::Reset, Color::Indexed(236)),
             underline: ColorPair::default(),
             entry: ColorPair::default(),
+            bg: Color::Reset,
             directory: ColorPair::new(Color::Blue, Color::Reset),
             separator: ColorPair::new(Color::Indexed(238), Color::Reset),
             selection_icon: "".into(),
@@ -175,6 +178,10 @@ impl Theme {
         self.preview.selection_style(&self.selection)
     }
 
+    pub(crate) fn bg_style(&self) -> Style {
+        ColorPair::new(Color::Reset, self.bg).style_or(&ColorPair::default())
+    }
+
     pub(crate) fn parent_selection_style(&self) -> Style {
         self.parent.selection_style(&self.selection)
     }
@@ -259,12 +266,12 @@ impl Theme {
         {
             base.apply_user_overrides(self);
             base.build_style_maps();
-            base.inherit_pane_entries();
+            base.inherit_pane_colors();
             return base;
         }
 
         self.build_style_maps();
-        self.inherit_pane_entries();
+        self.inherit_pane_colors();
         self
     }
 
@@ -350,6 +357,7 @@ impl Theme {
             selection,
             underline,
             entry,
+            bg,
             directory,
             separator,
             parent,
@@ -396,9 +404,9 @@ impl Theme {
             .collect();
     }
 
-    fn inherit_pane_entries(&mut self) {
-        self.parent.inherit_theme(&self.entry);
-        self.preview.inherit_theme(&self.entry);
+    fn inherit_pane_colors(&mut self) {
+        self.parent.inherit(&self.entry, self.bg);
+        self.preview.inherit(&self.entry, self.bg);
     }
 }
 

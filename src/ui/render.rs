@@ -96,11 +96,10 @@ pub(crate) fn render(
             clipboard_style,
         );
 
-        let parent_entry = theme_cfg.parent().entry_style_or_theme();
-        fill_pane(frame, chunks[pane_idx], parent_entry);
+        fill_pane(frame, chunks[pane_idx], theme_cfg.parent().bg_style());
 
         let parent_pane_style = PaneStyles::new(theme_cfg)
-            .with_entry(parent_entry)
+            .with_entry(theme_cfg.parent().entry_style())
             .with_selection(theme_cfg.parent_selection_style());
 
         panes::draw_parent(
@@ -138,7 +137,7 @@ pub(crate) fn render(
             ""
         };
 
-        fill_pane(frame, chunks[pane_idx], theme_cfg.entry_style());
+        fill_pane(frame, chunks[pane_idx], theme_cfg.bg_style());
 
         panes::draw_main(
             frame,
@@ -169,8 +168,7 @@ pub(crate) fn render(
 
     // PREVIEW PANE
     if display_cfg.preview() && pane_idx < chunks.len() {
-        let preview_entry = theme_cfg.preview().entry_style_or_theme();
-        fill_pane(frame, chunks[pane_idx], preview_entry);
+        fill_pane(frame, chunks[pane_idx], theme_cfg.preview().bg_style());
 
         let preview_dir = app.preview().current_path();
         let preview_markers = panes::make_pane_markers(
@@ -183,7 +181,7 @@ pub(crate) fn render(
         );
 
         let preview_pane_style = PaneStyles::new(theme_cfg)
-            .with_entry(theme_cfg.preview().entry_style_or_theme())
+            .with_entry(theme_cfg.preview().entry_style())
             .with_selection(theme_cfg.preview_selection_style());
 
         panes::draw_preview(
