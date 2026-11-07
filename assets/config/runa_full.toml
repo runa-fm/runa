@@ -243,6 +243,10 @@ selection_icon = ""
 # Set the colors of binaries/executables.
 exe_color = "LightGreen"
 
+# Background color of all panes.
+# Can be overwritten for each pane.
+bg = "default"
+
 # You can set each color field directly in [theme] instead.
 # There is now need to create each [theme] subsection for overriding and or creating custom themes.
 # Example:
@@ -282,11 +286,14 @@ bg = "#303030"
 fg = "#444444"
 bg = "default"
 
-[theme.entry]         # Normal entries
+# Entry colors in all panes, applied to the entry name and the default file and folder icons.
+# Icons with their own color (.json, .png, ...) keep their foreground color.
+# Can be overwritten for each pane.
+[theme.entry]         # Entries
 fg = "default"
 bg = "default"
 
-[theme.directory]     # Directory entries
+[theme.directory]     # Directory entries, overrides [theme.entry]
 fg = "blue"
 bg = "default"
 
@@ -294,9 +301,13 @@ bg = "default"
 fg = "#444444"
 bg = "default"
 
-[theme.parent]        # Parent pane text
-fg = "default"
+[theme.parent]        # Parent pane overrides
+# Overrides the [theme] bg for just the parent pane
 bg = "default"
+
+# Overrides [theme.entry] for just the parent pane
+entry.fg = "default"
+entry.bg = "default"
 
 # Sets the selection coloring mode.
 # If off, then selection.fg and .bg are ignored and off.
@@ -307,9 +318,13 @@ selection_mode = "on"
 selection.fg = "default"
 selection.bg = "default"
 
-[theme.preview]       # Preview pane text
-fg = "default"
+[theme.preview]       # Preview pane overrides
+# Overrides the [theme] bg for just the preview pane
 bg = "default"
+
+# Overrides [theme.entry] for just the preview pane
+entry.fg = "default"
+entry.bg = "default"
 
 # Sets the selection coloring mode.
 # If off, then selection.fg and .bg are ignored and off.

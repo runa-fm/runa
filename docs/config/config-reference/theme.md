@@ -67,6 +67,13 @@ The name of the preset themes included in runa. Choose a preset, or leave as "de
 - `"dracula"`
 - `"monokai"`
 
+### `bg`
+
+- **Type**: `string`
+- **Default**: `"default"`
+
+Background color of all panes. `[theme.parent]` and `[theme.preview]` can override it per pane.
+
 ### `selection_icon`
 
 - **Type**: `string`
@@ -112,14 +119,15 @@ Borders and titles colors.
 
 ### `[theme.entry]`
 
-Normal entry colors.
+Entry colors in all panes. Applies to the entry name and the default file and folder icons, not the whole row.  
+Icons with their own color, such as `.json` or `.png`, keep their foreground color.
 
 - `fg` - Foreground color
 - `bg` - Background color
 
 ### `[theme.directory]`
 
-Directory entry colors.
+Directory entry colors. Overrides `[theme.entry]` for directories.
 
 - `fg` - Foreground color
 - `bg` - Background color
@@ -133,23 +141,29 @@ Vertical separators color.
 
 ### `[theme.parent]`
 
-Parent pane text colors.
+Parent pane overrides.
 
-- `fg` - Foreground color
-- `bg` - Background color
+- `bg` - Overrides the `[theme]` `bg` for just the parent pane
+- `entry.fg` - Overrides `[theme.entry]` for just the parent pane
+- `entry.bg` - Overrides `[theme.entry]` for just the parent pane
 - `selection_mode` - Sets the selection coloring mode. If `"off"`, then `selection.fg` and `.bg` are ignored. If `"on"`, then `selection.bg` and `.bg` are set to `"default"` or to a specific override.
 - `selection.fg` - Overrides the central `[theme.selection]` for just the parent pane
 - `selection.bg` - Overrides the central `[theme.selection]` for just the parent pane
 
+A flat `fg` is still accepted as an older name for `entry.fg`.
+
 ### `[theme.preview]`
 
-Preview pane text colors.
+Preview pane overrides.
 
-- `fg` - Foreground color
-- `bg` - Background color
+- `bg` - Overrides the `[theme]` `bg` for just the preview pane
+- `entry.fg` - Overrides `[theme.entry]` for just the preview pane
+- `entry.bg` - Overrides `[theme.entry]` for just the preview pane
 - `selection_mode` - Sets the selection coloring mode. If `"off"`, then `selection.fg` and `.bg` are ignored. If `"on"`, then `selection.bg` and `.bg` are set to `"default"` or to a specific override.
 - `selection.fg` - Overrides the central `[theme.selection]` for just the preview pane
 - `selection.bg` - Overrides the central `[theme.selection]` for just the preview pane
+
+A flat `fg` is still accepted as an older name for `entry.fg`.
 
 ### `[theme.symlink]`
 
