@@ -1,7 +1,7 @@
 [package]
 name = "runa-fm"
 description = "A fast, keyboard-focused terminal file manager (TUI). Highly configurable and lightweight."
-version = "0.15.4-alpha.1"
+version = "0.15.4"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT OR Apache-2.0"
