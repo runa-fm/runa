@@ -5,12 +5,14 @@ upstream_tag_template: "v{version}"
 
 srpm_build_deps:
   - cargo
+  - cargo-vendor-filterer
   - xz
 
 actions:
   create-archive:
     - bash -c "git archive --prefix=runa-${PACKIT_PROJECT_VERSION}/ -o packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz HEAD"
-    - bash -c "cargo vendor --locked --versioned-dirs packaging/fedora/vendor >/dev/null"
+    - bash -c "cargo metadata --locked --format-version 1 >/dev/null"
+    - bash -c "cargo vendor-filterer --platform x86_64-unknown-linux-gnu --platform aarch64-unknown-linux-gnu packaging/fedora/vendor >/dev/null"
     - bash -c "tar -C packaging/fedora -cJf packaging/fedora/runa-vendor.tar.xz vendor"
     - bash -c "echo packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz"
 

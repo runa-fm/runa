@@ -7,7 +7,7 @@ Version:        0.15.3
 Release:        1%{?dist}
 Summary:        Fast and lightweight terminal file manager
 
-License:        (MIT OR Apache-2.0) AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND CC0-1.0 AND ISC AND MIT AND (MIT OR Unlicense) AND Zlib
+License:        (MIT OR Apache-2.0) AND Unicode-3.0 AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND CC0-1.0 AND ISC AND MIT AND (MIT OR Unlicense) AND Zlib AND (Zlib OR Apache-2.0 OR MIT)
 URL:            https://github.com/runa-fm/runa
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
 Source1:        %{name}-vendor.tar.xz
