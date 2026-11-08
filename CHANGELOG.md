@@ -2,7 +2,9 @@
 
 All the changes made to runa are documented here.
 
-## [0.15.2] - UNRELEASED
+## [0.15.2] - 2026-11-08
+
+#### Pane backgrounds, entry colors in all panes and fixes.
 
 ### Added
 - **Theme**:
@@ -12,6 +14,7 @@ All the changes made to runa are documented here.
 ### Fixed
 - **Theme**: `entry.bg` now correctly applies the background color to every entry and no longer fills the space around entries.
 - **Preview**: File previews no longer cut into the pane background.
+- **Tabs**: Switching to a tab for the first time no longer flashes `[Empty]`.
 
 ### Changed
 - **Theme**:
