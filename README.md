@@ -7,6 +7,7 @@
 [![Latest Release](https://img.shields.io/github/v/release/runa-fm/runa?style=flat-square&color=8839ef&label=Release)](https://github.com/runa-fm/runa/releases)
 [![Crates.io](https://img.shields.io/crates/v/runa-fm?style=flat-square&color=e67e22&logo=rust)](https://crates.io/crates/runa-fm)
 [![AUR](https://img.shields.io/aur/version/runa?label=AUR&color=blue&style=flat-square&logo=archlinux)](https://aur.archlinux.org/packages/runa)
+[![COPR](https://img.shields.io/badge/COPR-runa-51A2DA?style=flat-square&logo=fedora)](https://copr.fedorainfracloud.org/coprs/alexm-dev/runa/)
 [![Language](https://img.shields.io/github/languages/top/runa-fm/runa?style=flat-square&logo=rust&color=%23e67e22&label=Rust)](https://github.com/runa-fm/runa)
 [![License](https://img.shields.io/badge/License-MIT%20or%20Apache%202.0-blue?style=flat-square)](#license)
 
@@ -80,6 +81,15 @@ yay -S runa
 
 # or for binaries through the AUR
 yay -S runa-bin
+```
+
+### Fedora
+
+You can install runa from [COPR](https://copr.fedorainfracloud.org/coprs/alexm-dev/runa/).
+
+```bash
+sudo dnf copr enable alexm-dev/runa
+sudo dnf install runa
 ```
 
 ### Homebrew

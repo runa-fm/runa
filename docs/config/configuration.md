@@ -39,6 +39,15 @@ yay -S runa
 yay -S runa-bin
 ```
 
+### Fedora
+
+You can install runa from [COPR](https://copr.fedorainfracloud.org/coprs/alexm-dev/runa/).
+
+```bash
+sudo dnf copr enable alexm-dev/runa
+sudo dnf install runa
+```
+
 ### Homebrew
 
 You can install runa via homebrew.
