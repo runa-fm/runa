@@ -11,7 +11,7 @@ readme = "README.md"
 authors = ["Alexandros McCray <alexandros@amccray.com>"]
 categories = ["filesystem", "command-line-utilities", "command-line-interface"]
 keywords = ["file-browser", "file-manager", "tui", "cli", "search"]
-exclude = ["benches/", "docs/book/"]
+exclude = ["packaging/", ".packit.yaml", "benches/", "docs/book/"]
 autobenches = false
 
 [lib]
