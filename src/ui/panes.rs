@@ -198,9 +198,10 @@ pub(super) fn draw_main(
 
     if !app.has_visible_entries() {
         let style = context.styles.item;
+        let label = if app.is_loading() { "" } else { "[Empty]" };
         let line = Line::from(vec![
             Span::raw(context.padding_str),
-            Span::styled("[Empty]", style),
+            Span::styled(label, style),
         ]);
 
         frame.render_widget(
