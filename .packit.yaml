@@ -1,0 +1,29 @@
+specfile_path: packaging/fedora/runa.spec
+upstream_package_name: runa
+downstream_package_name: runa
+upstream_tag_template: "v{version}"
+
+srpm_build_deps:
+  - cargo
+
+actions:
+  create-archive:
+    - bash -c "git archive --prefix=runa-${PACKIT_PROJECT_VERSION}/ -o packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz HEAD"
+    - bash -c "cargo vendor --locked --versioned-dirs packaging/fedora/vendor >/dev/null"
+    - bash -c "tar -C packaging/fedora -czf packaging/fedora/runa-vendor.tar.gz vendor"
+    - bash -c "echo packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz"
+
+jobs:
+  - job: copr_build
+    trigger: release
+    owner: alexm-dev
+    project: runa
+    targets:
+      - fedora-all-x86_64
+      - fedora-all-aarch64
+
+  - job: copr_build
+    trigger: pull_request
+    targets:
+      - fedora-latest-stable
+
