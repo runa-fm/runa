@@ -13,7 +13,7 @@ Commands run from the root of the runa repo.
 
 ## 0. Once: Arch
 
-`packaging/scripts/release.sh` needs the Arch tools: `updpkgsums` and `makepkg`.
+`packaging/release.sh` needs the Arch tools: `updpkgsums` and `makepkg`.
 The script uses toolbox and runs these Arch tools on any Linux host.
 
 Check first that the toolbox exists:
@@ -97,7 +97,7 @@ Before: runa is clean on `main` and **equal** to `origin/main`.
 Run:
 
 ```sh
-packaging/scripts/release.sh X.Y.Z
+packaging/release.sh X.Y.Z
 ```
 
 What it does:
@@ -115,7 +115,7 @@ If the release stops:
 
 - Before committing: discard with `git restore packaging/arch`. The clones are temporary and need no cleanup.
 - After committing, before pushing: undo the runa commit with `git reset --keep origin/main`.
-- After runa is pushed: run `packaging/scripts/release.sh X.Y.Z` again. It skips what is already published and finishes the rest.
+- After runa is pushed: run `packaging/release.sh X.Y.Z` again. It skips what is already published and finishes the rest.
 
 The script prints the right command when it stops.
 

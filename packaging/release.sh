@@ -2,7 +2,7 @@
 #
 # Updates the runa packages for the AUR, Homebrew and Scoop to a release.
 #
-# Usage: packaging/scripts/release.sh <version>
+# Usage: packaging/release.sh <version>
 #
 # Run it in a clean clone of runa on main. With the version that is already
 # packaged, it only verifies the packages and changes nothing. After a failed
@@ -431,7 +431,7 @@ main() {
     VERSION=$1
     TAG="v$VERSION"
 
-    cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/../.."
+    cd -P -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
     TMP=$(mktemp -d)
     AUR_DIR=$TMP/aur
     BREW_DIR=$TMP/homebrew-tap
