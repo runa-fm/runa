@@ -1,49 +1,50 @@
-%global debug_package %{nil}
+%bcond check 1
+
+%global cargo_install_lib 0
 
 Name:           runa
-Version:        0.15.2
+Version:        0.15.3
 Release:        1%{?dist}
-Summary:        A fast and lightweight terminal file manager written in Rust
+Summary:        Fast and lightweight terminal file manager
 
-License:        MIT OR Apache-2.0
+License:        (MIT OR Apache-2.0) AND (Apache-2.0 OR BSL-1.0) AND (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT) AND CC0-1.0 AND ISC AND MIT AND (MIT OR Unlicense) AND Zlib
 URL:            https://github.com/runa-fm/runa
 Source0:        %{url}/archive/v%{version}/%{name}-%{version}.tar.gz
-Source1:        %{name}-vendor.tar.gz
+Source1:        %{name}-vendor.tar.xz
 
-ExclusiveArch:  x86_64 aarch64
-BuildRequires:  cargo >= 1.90
-BuildRequires:  rust >= 1.90
+BuildRequires:  cargo-rpm-macros
 
 %description
 runa is a fast, keyboard-focused terminal file manager (TUI).
 Highly configurable and lightweight.
 
 %prep
-%autosetup -n %{name}-%{version}
-tar -xzf %{SOURCE1}
-mkdir -p .cargo
-cat > .cargo/config.toml <<'EOF'
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor"
-EOF
+%autosetup -n %{name}-%{version} -p1 -a1
+%cargo_prep -v vendor
 
 %build
-cargo build --frozen --release
-
-%check
-cargo test --frozen
+%cargo_build
+%{cargo_license_summary}
+%{cargo_license} > LICENSE.dependencies
+%{cargo_vendor_manifest}
 
 %install
-install -Dm755 target/release/rn -t %{buildroot}%{_bindir}
+%cargo_install
+
+%if %{with check}
+%check
+%cargo_test
+%endif
 
 %files
 %license LICENSE-MIT LICENSE-APACHE
-%doc README.md docs/config/configuration.md docs/config/config-reference
+%license LICENSE.dependencies
+%license cargo-vendor.txt
+%doc README.md
+%doc docs/config/configuration.md
+%doc docs/config/config-reference
 %{_bindir}/rn
 
 %changelog
-* Sun Nov 08 2026 Alexandros McCray <alexandros@amccray.com> - 0.15.2-1
+* Sun Nov 08 2026 Alexandros McCray <alexandros@amccray.com> - 0.15.3-1
 - Initial package

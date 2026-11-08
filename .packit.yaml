@@ -5,12 +5,13 @@ upstream_tag_template: "v{version}"
 
 srpm_build_deps:
   - cargo
+  - xz
 
 actions:
   create-archive:
     - bash -c "git archive --prefix=runa-${PACKIT_PROJECT_VERSION}/ -o packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz HEAD"
     - bash -c "cargo vendor --locked --versioned-dirs packaging/fedora/vendor >/dev/null"
-    - bash -c "tar -C packaging/fedora -czf packaging/fedora/runa-vendor.tar.gz vendor"
+    - bash -c "tar -C packaging/fedora -cJf packaging/fedora/runa-vendor.tar.xz vendor"
     - bash -c "echo packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz"
 
 jobs:
@@ -18,12 +19,13 @@ jobs:
     trigger: release
     owner: alexm-dev
     project: runa
+    enable_net: false
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
 
   - job: copr_build
     trigger: pull_request
+    enable_net: false
     targets:
       - fedora-latest-stable
-
