@@ -527,3 +527,42 @@ fn make_theme(name: &str, palette: Palette, icon: &str) -> Theme {
         ..Theme::default()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pane_colors_inherit_and_override() {
+        let theme = toml::from_str::<Theme>(
+            r##"
+bg = "#101010"
+entry = { fg = "#112233", bg = "#445566" }
+parent.fg = "red"
+preview.bg = "#202020"
+preview.entry.fg = "blue"
+"##,
+        )
+        .unwrap()
+        .with_overrides();
+
+        let entry_bg = Color::Rgb(0x44, 0x55, 0x66);
+
+        assert_eq!(
+            theme.parent().entry_style(),
+            Style::default().fg(Color::Red).bg(entry_bg)
+        );
+        assert_eq!(
+            theme.parent().bg_style(),
+            Style::default().bg(Color::Rgb(0x10, 0x10, 0x10))
+        );
+        assert_eq!(
+            theme.preview().entry_style(),
+            Style::default().fg(Color::Blue).bg(entry_bg)
+        );
+        assert_eq!(
+            theme.preview().bg_style(),
+            Style::default().bg(Color::Rgb(0x20, 0x20, 0x20))
+        );
+    }
+}
