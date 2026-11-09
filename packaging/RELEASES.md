@@ -125,8 +125,7 @@ The script prints the right command when it stops.
 
 Not part of the script. Packit builds the `runa` COPR project from the published GitHub release, using `.packit.yaml` and `packaging/fedora/runa.spec`.
 
-1. Check that the build for `vX.Y.Z` succeeds on the COPR project page.
-2. The first release build asks for builder permission for `packit`. Approve it under the project's Permissions.
+Check that the build for `vX.Y.Z` succeeds on the COPR project page.
 
 ---
 
