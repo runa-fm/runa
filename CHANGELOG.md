@@ -2,6 +2,16 @@
 
 All the changes made to runa are documented here.
 
+## [0.15.5] - UNRELEASED
+
+### Added
+**Releases**:
+    - Added powerpc64le into the Packit builds for the COPR. Relevant: [#69](https://github.com/runa-fm/runa/issues/69)
+    - Added powerpc64le binaries to CI/CD and GitHub releases.
+
+---
+
+
 ## [0.15.4] - 2026-11-09
 
 #### Fedora package built with Fedora's Rust macros.
