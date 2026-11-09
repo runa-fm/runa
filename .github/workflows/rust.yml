@@ -36,6 +36,10 @@ jobs:
             os: ubuntu-latest
             platform: linux-aarch64-musl
             use_cross: true
+          - target: powerpc64le-unknown-linux-gnu
+            os: ubuntu-latest
+            platform: linux-ppc64le-gnu
+            use_cross: true
 
           # Windows
           - target: x86_64-pc-windows-msvc
