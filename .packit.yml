@@ -25,6 +25,7 @@ jobs:
     targets:
       - fedora-all-x86_64
       - fedora-all-aarch64
+      - fedora-all-ppc64le
 
   - job: copr_build
     trigger: pull_request
