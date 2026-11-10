@@ -9,6 +9,14 @@ All the changes made to runa are documented here.
     - Added powerpc64le into the Packit builds for the COPR. Relevant: [#69](https://github.com/runa-fm/runa/issues/69).
     - Added powerpc64le binaries to CI/CD and GitHub releases.
 
+### Fixed
+- **Watcher**: Panes are now correctly updated for any kind of directory change.
+
+### Internal
+- **Performance**:
+    - Watcher: Pending directories are allocated once, reducing allocations from 4020 to 4, with 10k events.
+
+
 ---
 
 
