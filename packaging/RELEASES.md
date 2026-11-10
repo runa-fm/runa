@@ -45,7 +45,8 @@ toolbox run -c runa-arch sudo pacman -S --needed pacman-contrib
 1. Changelog: rename `## [X.Y.Z] - UNRELEASED` to `## [X.Y.Z] - YYYY-MM-DD` and add the `#### <title>.` line.
     - The release workflow uses this section as the release notes.
 2. Set `version = "X.Y.Z"` in `Cargo.toml`, then run `cargo check` so `Cargo.lock` updates.
-3. Run the checks:
+3. Set `Version:   X.Y.Z` and update the `%changelog` in the `fedora/runa.spec` file.
+4. Run the checks:
 
 ```sh
 cargo fmt --all -- --check
