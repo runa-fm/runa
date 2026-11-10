@@ -154,6 +154,7 @@ impl AppState {
 
     /// Initializes the AppState by requesting the initial directory load and parent content.
     pub(crate) fn initialize(&mut self, workers: &Workers, focus: Option<OsString>) {
+        self.is_loading = true;
         self.request_dir_load(workers, focus);
         self.request_parent_content(workers);
     }
@@ -599,7 +600,6 @@ impl AppState {
 
     /// Requests a directory load for the current navigation directory
     pub(crate) fn request_dir_load(&mut self, workers: &Workers, focus: Option<OsString>) {
-        self.is_loading = true;
         let request_id = self.nav.prepare_new_request();
         let sort_config = self.nav.sort_config();
         let sort_date_format: Arc<str> = Arc::from(self.config.display().sort_date_format());
@@ -675,7 +675,6 @@ impl AppState {
     }
 
     pub(crate) fn request_dir_sort(&mut self, workers: &Workers, focus: Option<OsString>) {
-        self.is_loading = true;
         let request_id = self.nav.request_id();
         let sort_config = self.nav.sort_config();
         let sort_date_format: Arc<str> = Arc::from(self.config.display().sort_date_format());
