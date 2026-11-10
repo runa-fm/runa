@@ -24,7 +24,6 @@ mod task;
 mod watch;
 
 pub(crate) use task::*;
-pub(crate) use watch::WatchState;
 
 use std::ffi::OsString;
 use std::path::PathBuf;

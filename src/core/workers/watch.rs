@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use notify::{
     Config as NotifyConfig, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
-    event::ModifyKind,
+    event::{ModifyKind, RenameMode},
 };
 
 use crate::core::workers::{WatchCommand, WorkerResponse};
@@ -59,7 +59,7 @@ pub(super) fn start(cmd_rx: Receiver<WatchCommand>, res_tx: Sender<WorkerRespons
 ///
 /// Collects changed listing directories until debounce deadline passes.
 /// Config changes are reported right away.
-pub(crate) struct WatchState {
+struct WatchState {
     watcher: RecommendedWatcher,
     res_tx: Sender<WorkerResponse>,
     config_path: PathBuf,
@@ -81,7 +81,7 @@ impl WatchState {
     ///
     /// # Error
     /// The notify error when the watcher can not be created
-    pub(crate) fn new(
+    fn new(
         res_tx: Sender<WorkerResponse>,
         ev_tx: Sender<notify::Result<Event>>,
         config_path: PathBuf,
@@ -116,7 +116,7 @@ impl WatchState {
         Ok(state)
     }
 
-    pub(crate) fn retarget(&mut self, dirs: Vec<PathBuf>) {
+    fn retarget(&mut self, dirs: Vec<PathBuf>) {
         let new: HashSet<PathBuf> = dirs.into_iter().collect();
 
         for old in &self.watched {
@@ -136,7 +136,7 @@ impl WatchState {
 
     /// Watch event handler that sorts raw watcher event into config changes
     /// and changed listing directories.
-    pub(crate) fn handle_event(&mut self, result: &notify::Result<Event>) {
+    fn handle_event(&mut self, result: &notify::Result<Event>) {
         let event = match result {
             Ok(event) if !event.need_rescan() => event,
             _ => {
@@ -157,12 +157,13 @@ impl WatchState {
             }
         }
 
+        self.rewatch_appeared(event);
         self.classify_watch_event(event);
         self.schedule_flush();
     }
 
     /// Reports collected listings and clears the deadline.
-    pub(crate) fn flush(&mut self) {
+    fn flush(&mut self) {
         if !self.pending.is_empty() {
             let dirs: Vec<PathBuf> = self.pending.drain().collect();
             let _ = self.res_tx.send(WorkerResponse::DirsChanged { dirs });
@@ -175,6 +176,16 @@ impl WatchState {
         if !self.pending.is_empty() && self.deadline.is_none() {
             self.deadline =
                 Some(Instant::now() + Duration::from_millis(Timings::FS_WATCH_DEBOUNCE_MS));
+        }
+    }
+
+    fn rewatch_appeared(&mut self, event: &Event) {
+        if cfg!(target_os = "macos") {
+            return;
+        }
+
+        for dir in self.watched.iter().filter(|dir| appeared(event, dir)) {
+            let _ = self.watcher.watch(dir, RecursiveMode::NonRecursive);
         }
     }
 
@@ -217,12 +228,18 @@ impl WatchState {
         }
 
         for path in &event.paths {
-            if self.watched.contains(path) {
-                self.pending.insert(path.clone());
+            let dir = if self.watched.contains(path.as_path()) {
+                path.as_path()
             } else if let Some(parent) = path.parent()
                 && self.watched.contains(parent)
             {
-                self.pending.insert(parent.to_path_buf());
+                parent
+            } else {
+                continue;
+            };
+
+            if !self.pending.contains(dir) {
+                self.pending.insert(dir.to_path_buf());
             }
         }
     }
@@ -247,10 +264,18 @@ fn is_config_dir(dir: Option<&Path>, config_path: &Path) -> bool {
 }
 
 fn appeared(event: &Event, path: &Path) -> bool {
-    matches!(
-        event.kind,
-        EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(_))
-    ) && event.paths.iter().any(|p| p == path)
+    match event.kind {
+        EventKind::Create(_) | EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+            event.paths.iter().any(|p| p == path)
+        }
+        EventKind::Modify(ModifyKind::Name(RenameMode::Both)) => {
+            event.paths.last().is_some_and(|p| p == path)
+        }
+        EventKind::Modify(ModifyKind::Name(RenameMode::Any | RenameMode::Other)) => {
+            event.paths.iter().any(|p| p == path) && path.is_dir()
+        }
+        _ => false,
+    }
 }
 
 fn resolve_config_watch_dir(config_dir: &Path) -> Option<PathBuf> {
@@ -268,7 +293,7 @@ fn resolve_config_watch_dir(config_dir: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
-    use notify::event::CreateKind;
+    use notify::event::{CreateKind, Flag, RemoveKind};
     use std::fs;
     use tempfile::tempdir;
 
@@ -315,6 +340,109 @@ mod tests {
             &config_path,
             name
         ));
+        Ok(())
+    }
+
+    #[test]
+    fn appeared_only_when_dir_arrives() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempdir()?;
+        let dir = temp.path().join("x");
+        let other = temp.path().join("y");
+        fs::create_dir(&dir)?;
+        let rename = |mode| Event::new(EventKind::Modify(ModifyKind::Name(mode)));
+
+        assert!(appeared(
+            &Event::new(EventKind::Create(CreateKind::Folder)).add_path(dir.clone()),
+            &dir
+        ));
+        assert!(appeared(
+            &rename(RenameMode::To).add_path(dir.clone()),
+            &dir
+        ));
+        assert!(appeared(
+            &rename(RenameMode::Both)
+                .add_path(other.clone())
+                .add_path(dir.clone()),
+            &dir
+        ));
+        assert!(appeared(
+            &rename(RenameMode::Any).add_path(dir.clone()),
+            &dir
+        ));
+        assert!(!appeared(
+            &rename(RenameMode::Any).add_path(other.clone()),
+            &other
+        ));
+        assert!(!appeared(
+            &rename(RenameMode::From).add_path(dir.clone()),
+            &dir
+        ));
+        assert!(!appeared(
+            &rename(RenameMode::Both)
+                .add_path(dir.clone())
+                .add_path(other.clone()),
+            &dir
+        ));
+        assert!(!appeared(
+            &Event::new(EventKind::Remove(RemoveKind::Folder)).add_path(dir.clone()),
+            &dir
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn overflow_and_errors_mark_every_watched_dir() -> Result<(), Box<dyn std::error::Error>> {
+        let (res_tx, res_rx) = unbounded();
+        let (ev_tx, _ev_rx) = unbounded();
+        let temp = tempdir()?;
+
+        let mut state = WatchState::new(res_tx, ev_tx, temp.path().join("runa.toml"))?;
+        let dirs = vec![temp.path().join("a"), temp.path().join("b")];
+        for dir in &dirs {
+            fs::create_dir(dir)?;
+        }
+        state.retarget(dirs.clone());
+
+        for result in [
+            Ok(Event::new(EventKind::Other).set_flag(Flag::Rescan)),
+            Err(notify::Error::generic("lost")),
+        ] {
+            state.handle_event(&result);
+            state.flush();
+
+            match res_rx.try_recv()? {
+                WorkerResponse::DirsChanged { dirs: mut changed } => {
+                    changed.sort();
+                    assert_eq!(changed, dirs);
+                }
+                _ => return Err("expected DirsChanged".into()),
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn repeated_events_report_dirs_once() -> Result<(), Box<dyn std::error::Error>> {
+        let (res_tx, res_rx) = unbounded();
+        let (ev_tx, _ev_rx) = unbounded();
+        let temp = tempdir()?;
+
+        let mut state = WatchState::new(res_tx, ev_tx, temp.path().join("runa.toml"))?;
+        let dir = temp.path().join("a");
+        fs::create_dir(&dir)?;
+        state.retarget(vec![dir.clone()]);
+
+        for name in ["x", "y", "x"] {
+            state.handle_event(&Ok(
+                Event::new(EventKind::Create(CreateKind::File)).add_path(dir.join(name))
+            ));
+        }
+        state.flush();
+        match res_rx.try_recv()? {
+            WorkerResponse::DirsChanged { dirs } => assert_eq!(dirs, vec![dir]),
+            _ => return Err("expected DirsChanged".into()),
+        }
+
         Ok(())
     }
 }

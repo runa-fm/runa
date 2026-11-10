@@ -20,7 +20,7 @@ use crossterm::event::KeyEvent;
 use ratatui::text::Span;
 
 use crate::app::{
-    Clipboard, NavState, ParentState, PreviewState,
+    Clipboard, NavState, ParentState, PreviewData, PreviewState,
     actions::{ActionContext, ActionMode, InputMode},
     keymap::{Action, Keymap, TabAction},
     metadata::MetadataState,
@@ -214,6 +214,20 @@ impl AppState {
 
     pub(crate) fn has_visible_entries(&self) -> bool {
         !self.nav.entries().is_empty()
+    }
+
+    /// Returns the directories the panes show in order:
+    /// - current/main pane
+    /// - parent
+    /// - preview, only when it shows a directory
+    pub(crate) fn shown_dirs(&self) -> [Option<&Path>; 3] {
+        let current = self.nav.current_dir();
+        let preview = self
+            .preview
+            .loaded_path()
+            .filter(|_| matches!(self.preview.data(), PreviewData::Directory { .. }));
+
+        [Some(current), current.parent(), preview]
     }
 
     /// Metrics updater for LayoutMetrics to request_preview new preview after old metrics
@@ -877,7 +891,7 @@ impl AppState {
             self.request_parent_content(workers);
         }
 
-        if touches_preview {
+        if touches_preview && !touches_current {
             self.request_preview_force(workers);
         }
     }
@@ -1078,6 +1092,46 @@ mod tests {
             "request_id did not change: request_parent_content should schedule a fresh parent request when worker cache misses"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn shown_dirs_follow_panes() -> Result<(), Box<dyn std::error::Error>> {
+        let temp = tempdir()?;
+        let current = temp.path().join("a");
+        let y = current.join("y");
+
+        std::fs::create_dir_all(&y)?;
+        let mut app = AppState::from_dir(Arc::new(dummy_config()), &current)?;
+
+        assert_eq!(
+            app.shown_dirs(),
+            [Some(current.as_path()), Some(temp.path()), None]
+        );
+
+        let request_id = app.preview.prepare_new_request(y.clone());
+        app.preview
+            .update_from_entries(Arc::default(), None, 0, 10, request_id);
+        let with_y = [
+            Some(current.as_path()),
+            Some(temp.path()),
+            Some(y.as_path()),
+        ];
+        assert_eq!(app.shown_dirs(), with_y);
+
+        let request_id = app.preview.prepare_new_request(current.join("f"));
+        assert_eq!(
+            app.shown_dirs(),
+            with_y,
+            "y stays shown until the file loads"
+        );
+
+        let lines = crate::core::workers::PreviewLines::Text(vec!["x".to_string()]);
+        app.preview.update_content(lines, 10, 0, true, request_id);
+        assert_eq!(
+            app.shown_dirs(),
+            [Some(current.as_path()), Some(temp.path()), None]
+        );
         Ok(())
     }
 }

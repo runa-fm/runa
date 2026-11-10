@@ -7,7 +7,7 @@
 //! [RunaRoot] is the main struct, which holds the [AppContainer], the [Clipboard] and the [Workers].
 
 use std::io;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crossterm::{
@@ -33,7 +33,7 @@ pub(crate) struct RunaRoot {
     workers: Workers,
     ui_reload_throttler: Throttler,
     config_reload_throttler: Throttler,
-    last_watch_dir: Option<PathBuf>,
+    watched_dirs: [Option<PathBuf>; 3],
 }
 
 impl RunaRoot {
@@ -45,7 +45,7 @@ impl RunaRoot {
             workers,
             config_reload_throttler: Throttler::default(),
             ui_reload_throttler: Throttler::default(),
-            last_watch_dir: None,
+            watched_dirs: Default::default(),
         }
     }
 
@@ -70,7 +70,7 @@ impl RunaRoot {
                 .current_mut()
                 .handle_keypress(key, &self.workers, &mut self.clipboard);
 
-        match result {
+        let result = match result {
             KeypressResult::Tab(tab_act) => {
                 tab::handle_tab_action(&self.workers, &mut self.container, tab_act)
             }
@@ -79,7 +79,10 @@ impl RunaRoot {
                 KeypressResult::Consumed
             }
             other => other,
-        }
+        };
+
+        self.sync_watch();
+        result
     }
 
     pub(crate) fn render(&mut self, frame: &mut Frame) {
@@ -132,21 +135,25 @@ impl RunaRoot {
     }
 
     fn sync_watch(&mut self) {
-        let current = self.container.current().nav().current_dir();
-        if self.last_watch_dir.as_deref() == Some(current) {
+        let shown = self.container.current().shown_dirs();
+        if shown
+            .iter()
+            .zip(&self.watched_dirs)
+            .all(|(now, last)| *now == last.as_deref())
+        {
             return;
         }
 
-        let current = current.to_path_buf();
-
-        let mut dirs = Vec::with_capacity(2);
-        dirs.push(current.clone());
-        if let Some(parent) = current.parent() {
-            dirs.push(parent.to_path_buf());
+        let cache = self.workers.cache();
+        for last in self.watched_dirs.iter().flatten() {
+            if !shown.contains(&Some(last.as_path())) {
+                cache.invalidate_path(last);
+            }
         }
 
-        self.workers.retarget_watch(dirs);
-        self.last_watch_dir = Some(current);
+        self.watched_dirs = shown.map(|dir| dir.map(Path::to_path_buf));
+        self.workers
+            .retarget_watch(self.watched_dirs.iter().flatten().cloned().collect());
     }
 
     fn reload_config(&mut self) {
