@@ -4,7 +4,7 @@
 //! When a change is detected, it sends a message to the main thread to handle the change.
 
 use std::collections::HashSet;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
@@ -24,13 +24,8 @@ pub(super) fn start(cmd_rx: Receiver<WatchCommand>, res_tx: Sender<WorkerRespons
     thread::spawn(move || {
         let (ev_tx, ev_rx) = unbounded::<notify::Result<Event>>();
 
-        let mut watcher = match RecommendedWatcher::new(
-            move |result| {
-                let _ = ev_tx.send(result);
-            },
-            NotifyConfig::default(),
-        ) {
-            Ok(watcher) => watcher,
+        let mut state = match WatchState::new(res_tx.clone(), ev_tx, os::default_config_path()) {
+            Ok(state) => state,
             Err(e) => {
                 let _ = res_tx.send(WorkerResponse::Error(format!(
                     "Watch error: failed to create watcher: {}",
@@ -40,134 +35,195 @@ pub(super) fn start(cmd_rx: Receiver<WatchCommand>, res_tx: Sender<WorkerRespons
             }
         };
 
-        let config_path = os::default_config_path();
+        loop {
+            let timer = state.timer();
+
+            crossbeam_channel::select! {
+                recv(cmd_rx) -> msg => match msg {
+                    Ok(WatchCommand::Retarget(dirs)) => state.retarget(dirs),
+                    // All senders dropped: runa is shutting down.
+                    Err(_) => break,
+                },
+                recv(ev_rx) -> msg => {
+                    if let Ok(result) = msg {
+                        state.handle_event(&result);
+                    }
+                },
+                recv(timer) -> _ => state.flush(),
+            }
+        }
+    });
+}
+
+/// Watch state of the watcher thread
+///
+/// Collects changed listing directories until debounce deadline passes.
+/// Config changes are reported right away.
+pub(crate) struct WatchState {
+    watcher: RecommendedWatcher,
+    res_tx: Sender<WorkerResponse>,
+    config_path: PathBuf,
+    config_name: OsString,
+    config_dir: Option<PathBuf>,
+    config_watched: Vec<PathBuf>,
+    watched: HashSet<PathBuf>,
+    pending: HashSet<PathBuf>,
+    deadline: Option<Instant>,
+}
+
+impl WatchState {
+    /// Creates the watcher and starts watching the config directory
+    ///
+    /// # Arguments
+    /// * res_tx - channel for the change reportings
+    /// * ev_tx - channel the watcher sends the raw events to
+    /// * config_path - path to the runa toml config file
+    ///
+    /// # Error
+    /// The notify error when the watcher can not be created
+    pub(crate) fn new(
+        res_tx: Sender<WorkerResponse>,
+        ev_tx: Sender<notify::Result<Event>>,
+        config_path: PathBuf,
+    ) -> notify::Result<Self> {
+        let watcher = RecommendedWatcher::new(
+            move |result| {
+                let _ = ev_tx.send(result);
+            },
+            NotifyConfig::default(),
+        )?;
+
         let config_name = config_path
             .file_name()
             .map(|n| n.to_os_string())
             .unwrap_or_default();
 
         let config_dir = config_path.parent().map(Path::to_path_buf);
-        let mut config_watched: Vec<PathBuf> = Vec::new();
-        if let Some(watched_dir) = config_dir.as_deref().and_then(resolve_config_watch_dir) {
-            match watcher.watch(&watched_dir, RecursiveMode::NonRecursive) {
-                Ok(()) => config_watched.push(watched_dir),
-                Err(e) => {
-                    let _ =
-                        res_tx.send(WorkerResponse::Error(format!("Config watch error: {}", e)));
-                }
+
+        let mut state = Self {
+            watcher,
+            res_tx,
+            config_path,
+            config_name,
+            config_dir,
+            config_watched: Vec::new(),
+            watched: HashSet::new(),
+            pending: HashSet::new(),
+            deadline: None,
+        };
+
+        state.watch_config_dir();
+        Ok(state)
+    }
+
+    pub(crate) fn retarget(&mut self, dirs: Vec<PathBuf>) {
+        let new: HashSet<PathBuf> = dirs.into_iter().collect();
+
+        for old in &self.watched {
+            if !new.contains(old) && !self.config_watched.contains(old) {
+                let _ = self.watcher.unwatch(old);
             }
         }
 
-        let mut watched: HashSet<PathBuf> = HashSet::new();
-        let mut pending: HashSet<PathBuf> = HashSet::new();
-        let mut deadline: Option<Instant> = None;
-        let debounce = Duration::from_millis(Timings::FS_WATCH_DEBOUNCE_MS);
-
-        loop {
-            let timer = match deadline {
-                Some(d) => crossbeam_channel::after(d.saturating_duration_since(Instant::now())),
-                None => crossbeam_channel::never(),
-            };
-
-            crossbeam_channel::select! {
-                recv(cmd_rx) -> msg => match msg {
-                    Ok(WatchCommand::Retarget(dirs)) => {
-                        retarget_listing_watch(
-                            &mut watcher,
-                            &mut watched,
-                            dirs,
-                            &config_watched,
-                        );
-                    }
-                    // All senders dropped: runa is shutting down.
-                    Err(_) => break,
-                },
-                recv(ev_rx) -> msg => {
-                    if let Ok(Ok(event)) = msg {
-                        if let Some(dir) = &config_dir
-                            && !config_watched.contains(dir)
-                            && appeared(&event, dir)
-                            && watcher.watch(dir, RecursiveMode::NonRecursive).is_ok()
-                        {
-                            config_watched.push(dir.clone());
-                            if config_path.is_file() {
-                                let _ = res_tx.send(WorkerResponse::ConfigChanged);
-                            }
-                        }
-                        classify_watch_event(
-                            &event,
-                            &config_path,
-                            config_name.as_os_str(),
-                            &watched,
-                            &res_tx,
-                            &mut pending,
-                        );
-                        if !pending.is_empty() && deadline.is_none() {
-                            deadline = Some(Instant::now() + debounce);
-                        }
-                    }
-                },
-                recv(timer) -> _ => {
-                    if !pending.is_empty() {
-                        let dirs: Vec<PathBuf> = pending.drain().collect();
-                        let _ = res_tx.send(WorkerResponse::DirsChanged { dirs });
-                    }
-                    deadline = None;
-                },
+        for dir in &new {
+            if !self.watched.contains(dir) && !self.config_watched.contains(dir) {
+                let _ = self.watcher.watch(dir, RecursiveMode::NonRecursive);
             }
         }
-    });
-}
 
-fn retarget_listing_watch(
-    watcher: &mut RecommendedWatcher,
-    watched: &mut HashSet<PathBuf>,
-    dirs: Vec<PathBuf>,
-    config_watched: &[PathBuf],
-) {
-    let new: HashSet<PathBuf> = dirs.into_iter().collect();
-
-    for old in watched.iter() {
-        if !new.contains(old) && !config_watched.contains(old) {
-            let _ = watcher.unwatch(old);
-        }
+        self.watched = new;
     }
 
-    for dir in new.iter() {
-        if !watched.contains(dir) && !config_watched.contains(dir) {
-            let _ = watcher.watch(dir, RecursiveMode::NonRecursive);
-        }
-    }
+    /// Watch event handler that sorts raw watcher event into config changes
+    /// and changed listing directories.
+    pub(crate) fn handle_event(&mut self, result: &notify::Result<Event>) {
+        let event = match result {
+            Ok(event) if !event.need_rescan() => event,
+            _ => {
+                self.pending.extend(self.watched.iter().cloned());
+                self.schedule_flush();
+                return;
+            }
+        };
 
-    *watched = new;
-}
-
-fn classify_watch_event(
-    event: &Event,
-    config_path: &Path,
-    config_name: &OsStr,
-    watched: &HashSet<PathBuf>,
-    res_tx: &Sender<WorkerResponse>,
-    pending: &mut HashSet<PathBuf>,
-) {
-    if !matches!(
-        event.kind,
-        EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
-    ) {
-        return;
-    }
-
-    if is_config_changed(event, config_path, config_name) {
-        let _ = res_tx.send(WorkerResponse::ConfigChanged);
-    }
-
-    for path in &event.paths {
-        if watched.contains(path) {
-            pending.insert(path.clone());
-        } else if let Some(parent) = path.parent()
-            && watched.contains(parent)
+        if let Some(dir) = &self.config_dir
+            && !self.config_watched.contains(dir)
+            && appeared(event, dir)
+            && self.watcher.watch(dir, RecursiveMode::NonRecursive).is_ok()
         {
-            pending.insert(parent.to_path_buf());
+            self.config_watched.push(dir.clone());
+            if self.config_path.is_file() {
+                let _ = self.res_tx.send(WorkerResponse::ConfigChanged);
+            }
+        }
+
+        self.classify_watch_event(event);
+        self.schedule_flush();
+    }
+
+    /// Reports collected listings and clears the deadline.
+    pub(crate) fn flush(&mut self) {
+        if !self.pending.is_empty() {
+            let dirs: Vec<PathBuf> = self.pending.drain().collect();
+            let _ = self.res_tx.send(WorkerResponse::DirsChanged { dirs });
+        }
+
+        self.deadline = None;
+    }
+
+    fn schedule_flush(&mut self) {
+        if !self.pending.is_empty() && self.deadline.is_none() {
+            self.deadline =
+                Some(Instant::now() + Duration::from_millis(Timings::FS_WATCH_DEBOUNCE_MS));
+        }
+    }
+
+    fn timer(&self) -> Receiver<Instant> {
+        match self.deadline {
+            Some(dl) => crossbeam_channel::after(dl.saturating_duration_since(Instant::now())),
+            None => crossbeam_channel::never(),
+        }
+    }
+
+    fn watch_config_dir(&mut self) {
+        let Some(dir) = self
+            .config_dir
+            .as_deref()
+            .and_then(resolve_config_watch_dir)
+        else {
+            return;
+        };
+
+        match self.watcher.watch(&dir, RecursiveMode::NonRecursive) {
+            Ok(()) => self.config_watched.push(dir),
+            Err(e) => {
+                let _ = self
+                    .res_tx
+                    .send(WorkerResponse::Error(format!("Config watch error: {}", e)));
+            }
+        }
+    }
+
+    fn classify_watch_event(&mut self, event: &Event) {
+        if !matches!(
+            event.kind,
+            EventKind::Create(_) | EventKind::Modify(_) | EventKind::Remove(_)
+        ) {
+            return;
+        }
+
+        if is_config_changed(event, &self.config_path, &self.config_name) {
+            let _ = self.res_tx.send(WorkerResponse::ConfigChanged);
+        }
+
+        for path in &event.paths {
+            if self.watched.contains(path) {
+                self.pending.insert(path.clone());
+            } else if let Some(parent) = path.parent()
+                && self.watched.contains(parent)
+            {
+                self.pending.insert(parent.to_path_buf());
+            }
         }
     }
 }
