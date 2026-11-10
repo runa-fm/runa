@@ -2,7 +2,9 @@
 
 All the changes made to runa are documented here.
 
-## [0.15.5] - UNRELEASED
+## [0.15.5] - 2026-11-10
+
+#### Pane update fix and powerpc64le builds.
 
 ### Added
 - **Releases**:
@@ -10,18 +12,20 @@ All the changes made to runa are documented here.
     - Added powerpc64le binaries to CI/CD and GitHub releases.
 
 ### Fixed
-- **Watcher**: Panes are now correctly updated for directory changes.
+- **Watcher Thread**: Panes are now correctly updated for directory changes.
+- **Panes**: Empty directories and filters without results no longer flash on reload, for example after deleting the last file in a directory.
 
 ### Changed
-- **CI**:
-    - Add clippy checks for each OS.
-    - Dependabot now also checks GitHub actions weekly.
+- **Rust version**: Changed `rust-version` (MSRV) to `1.91`.
 
 ### Internal
-- **Rust version**: Changed pinned `rust-version` to `1.91`
 - **Packaging**: Added `packaging/check-licenses.sh`, which checks that the License tag in `runa.spec` matches the licenses of the dependencies. CI runs it after every push and PR.
 - **Performance**:
     - Watcher: Pending directories are allocated once, reducing allocations from 4020 to 4 for 10k events.
+- **CI**:
+    - Added clippy checks for each OS.
+    - Dependabot now also checks GitHub actions weekly.
+    - Added MSRV checks to `rust.yml`.
 
 
 ---

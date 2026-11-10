@@ -1,7 +1,7 @@
 [package]
 name = "runa-fm"
 description = "A fast, keyboard-focused terminal file manager (TUI). Highly configurable and lightweight."
-version = "0.15.5-alpha.2"
+version = "0.15.5"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -11,7 +11,7 @@ readme = "README.md"
 authors = ["Alexandros McCray <alexandros@amccray.com>"]
 categories = ["filesystem", "command-line-utilities", "command-line-interface"]
 keywords = ["file-browser", "file-manager", "tui", "cli", "search"]
-exclude = ["packaging/", ".packit.yaml", "benches/", "docs/book/"]
+exclude = ["packaging/", ".packit.yml", "benches/", "docs/book/"]
 autobenches = false
 
 [lib]
