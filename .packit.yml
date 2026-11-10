@@ -9,6 +9,10 @@ srpm_build_deps:
   - xz
 
 actions:
+  get-current-version:
+    - >-
+      bash -c "grep -m1 -oP '^version\s*=\s*\"\K[^\"]+' Cargo.toml | sed 's/-/~/'"
+
   create-archive:
     - bash -c "git archive --prefix=runa-${PACKIT_PROJECT_VERSION}/ -o packaging/fedora/runa-${PACKIT_PROJECT_VERSION}.tar.gz HEAD"
     - bash -c "cargo metadata --locked --format-version 1 >/dev/null"
