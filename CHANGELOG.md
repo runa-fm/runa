@@ -12,7 +12,13 @@ All the changes made to runa are documented here.
 ### Fixed
 - **Watcher**: Panes are now correctly updated for directory changes.
 
+### Changed
+- **CI**:
+    - Add clippy checks for each OS.
+    - Dependabot now also checks GitHub actions weekly.
+
 ### Internal
+- **Rust version**: Changed pinned `rust-version` to `1.99`
 - **Packaging**: Added `packaging/check-licenses.sh`, which checks that the License tag in `runa.spec` matches the licenses of the dependencies. CI runs it after every push and PR.
 - **Performance**:
     - Watcher: Pending directories are allocated once, reducing allocations from 4020 to 4 for 10k events.
