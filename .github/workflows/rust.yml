@@ -185,6 +185,15 @@ jobs:
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
+  licenses:
+    name: Licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check License tag
+        run: packaging/check-licenses.sh
+
   audit:
     name: Audit
     runs-on: ubuntu-latest
