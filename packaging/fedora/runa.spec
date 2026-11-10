@@ -3,7 +3,7 @@
 %global cargo_install_lib 0
 
 Name:           runa
-Version:        0.15.4
+Version:        0.15.5
 Release:        1%{?dist}
 Summary:        Fast and lightweight terminal file manager
 
@@ -46,6 +46,9 @@ Highly configurable and lightweight.
 %{_bindir}/rn
 
 %changelog
+* Tue Nov 09 2026 Alexandros McCray <alexandros@amccray.com> - 0.15.5-1
+- Update to 0.15.5
+
 * Mon Nov 09 2026 Alexandros McCray <alexandros@amccray.com> - 0.15.4-1
 - Update to 0.15.4
 
