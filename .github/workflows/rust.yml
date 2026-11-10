@@ -159,6 +159,7 @@ jobs:
           if-no-files-found: error
 
   msrv:
+    name: Check MSRV
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
