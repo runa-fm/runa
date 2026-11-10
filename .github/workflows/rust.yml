@@ -158,6 +158,14 @@ jobs:
           path: dist/rn*
           if-no-files-found: error
 
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.91
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check --locked
+
   clippy:
     name: Clippy (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
