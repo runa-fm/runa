@@ -2,6 +2,18 @@
 
 All the changes made to runa are documented here.
 
+## [0.15.6] - 2026-11-10
+
+#### Fedora spec version fix.
+
+### Internal
+- **Packaging**: The version and changelog in `runa.spec` now match the release. Packit had already set them correctly for the 0.15.5 COPR build.
+- **Releases**: `packaging/RELEASES.md` now covers the `runa.spec` version bump in release preparation.
+
+
+---
+
+
 ## [0.15.5] - 2026-11-10
 
 #### Pane update fix and powerpc64le builds.
