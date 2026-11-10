@@ -13,7 +13,6 @@ permissions:
 jobs:
   build:
     name: build (${{ matrix.target }})
-    if: github.repository_owner == github.actor || github.event.sender.type == 'User'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -160,8 +159,12 @@ jobs:
           if-no-files-found: error
 
   clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
+    name: Clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
@@ -169,7 +172,7 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          key: clippy-cache
+          key: clippy-${{ matrix.os }}
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
