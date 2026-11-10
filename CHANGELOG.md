@@ -10,11 +10,12 @@ All the changes made to runa are documented here.
     - Added powerpc64le binaries to CI/CD and GitHub releases.
 
 ### Fixed
-- **Watcher**: Panes are now correctly updated for any kind of directory change.
+- **Watcher**: Panes are now correctly updated for directory changes.
 
 ### Internal
+- **Packaging**: Added `packaging/check-licenses.sh`, which checks that the License tag in `runa.spec` matches the licenses of the dependencies. CI runs it after every push and PR.
 - **Performance**:
-    - Watcher: Pending directories are allocated once, reducing allocations from 4020 to 4, with 10k events.
+    - Watcher: Pending directories are allocated once, reducing allocations from 4020 to 4 for 10k events.
 
 
 ---
