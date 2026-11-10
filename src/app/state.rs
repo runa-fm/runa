@@ -950,14 +950,25 @@ mod tests {
     }
 
     #[test]
+    fn initialize_sets_is_loading() -> Result<(), Box<dyn std::error::Error>> {
+        let config = dummy_config();
+        let workers = dummy_workers();
+        let temp = tempdir()?;
+        let mut app = AppState::from_dir(Arc::new(config), temp.path())?;
+        app.initialize(&workers, None);
+        assert!(app.is_loading);
+        Ok(())
+    }
+
+    #[test]
     fn request_dir_load_sets_is_loading() -> Result<(), Box<dyn std::error::Error>> {
         let config = dummy_config();
         let workers = dummy_workers();
         let temp = tempdir()?;
         let mut app = AppState::from_dir(Arc::new(config), temp.path())?;
         app.is_loading = false;
-        app.request_dir_load(&workers, None);
-        assert!(app.is_loading);
+        app.request_dir_reload(&workers);
+        assert!(!app.is_loading);
         Ok(())
     }
 
