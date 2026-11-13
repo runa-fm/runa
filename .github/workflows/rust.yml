@@ -22,79 +22,43 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-x86_64-gnu
-            use_cross: true
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             platform: linux-aarch64-gnu
-            use_cross: true
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             platform: linux-x86_64-musl
-            use_cross: true
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
+            os: ubuntu-24.04-arm
             platform: linux-aarch64-musl
-            use_cross: true
           - target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-ppc64le-gnu
-            use_cross: true
 
           # Windows
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             platform: windows-x86_64
-            use_cross: false
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             platform: windows-aarch64
-            use_cross: false
 
           # macOS
           - target: x86_64-apple-darwin
             os: macos-latest
             platform: macos-x86_64
-            use_cross: false
           - target: aarch64-apple-darwin
             os: macos-latest
             platform: macos-aarch64
-            use_cross: false
 
     env:
       RELEASE_BUILD: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Rust Cache
-        if: env.RELEASE_BUILD != 'true'
-        uses: Swatinem/rust-cache@v2
-        with:
-          key: ${{ matrix.target }}
-
-      - name: Install cross
-        if: ${{ matrix.use_cross }}
-        env:
-          CROSS_VERSION: "v0.2.5"
-          PACKAGE_NAME: "cross-x86_64-unknown-linux-gnu.tar.gz"
-          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-        run: |
-          INSTALL_DIR="$HOME/.local/bin"
-          mkdir -p "$INSTALL_DIR"
-
-          echo "Downloading cross $CROSS_VERSION using gh CLI..."
-          gh release download "$CROSS_VERSION" \
-            --repo cross-rs/cross \
-            --pattern "$PACKAGE_NAME" \
-            -D "$INSTALL_DIR"
-
-          tar -xzf "$INSTALL_DIR/$PACKAGE_NAME" -C "$INSTALL_DIR"
-          echo "$INSTALL_DIR" >> $GITHUB_PATH
+        run: rustup target add ${{ matrix.target }}
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -106,6 +70,12 @@ jobs:
           ln -s $(which batcat) ~/.local/bin/bat
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Install ppc64le linker
+        if: matrix.target == 'powerpc64le-unknown-linux-gnu'
+        run: |
+          sudo apt-get install -y gcc-powerpc64le-linux-gnu
+          echo "CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER=powerpc64le-linux-gnu-gcc" >> "$GITHUB_ENV"
+
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install fd bat
@@ -116,23 +86,13 @@ jobs:
 
       - name: Build
         id: build_step
-        run: |
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross build --release --locked --target ${{ matrix.target }}
-          else
-            cargo build --release --locked --target ${{ matrix.target }}
-          fi
+        run: cargo build --release --locked --target ${{ matrix.target }}
         shell: bash
 
       - name: Test
         id: test_step
-        if: (matrix.target == 'x86_64-unknown-linux-gnu' || matrix.target == 'x86_64-apple-darwin' || matrix.target == 'x86_64-pc-windows-msvc')
-        run: |
-          if [ "${{ matrix.use_cross }}" = "true" ]; then
-            cross test --release --locked --target ${{ matrix.target }}
-          else
-            cargo test --release --locked --target ${{ matrix.target }}
-          fi
+        if: matrix.target != 'powerpc64le-unknown-linux-gnu' && matrix.target != 'aarch64-pc-windows-msvc'
+        run: cargo test --release --locked --target ${{ matrix.target }}
         shell: bash
 
       - name: Prepare binary (Linux/macOS)
@@ -152,7 +112,7 @@ jobs:
 
       - name: Upload artifact
         if: env.RELEASE_BUILD == 'true'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: bin-${{ matrix.platform }}
           path: dist/rn*
@@ -162,9 +122,9 @@ jobs:
     name: Check MSRV
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@1.91
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install MSRV toolchain
+        run: rustup default "$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)"
       - run: cargo check --locked
 
   clippy:
@@ -175,11 +135,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup component add clippy
         with:
           key: clippy-${{ matrix.os }}
       - name: Run Clippy
@@ -189,11 +146,8 @@ jobs:
     name: Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          components: rustfmt
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup component add rustfmt
       - name: Check Formatting
         run: cargo fmt --all -- --check
 
@@ -201,8 +155,7 @@ jobs:
     name: Licenses
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check License tag
         run: packaging/check-licenses.sh
 
@@ -210,16 +163,14 @@ jobs:
     name: Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-      - uses: dtolnay/rust-toolchain@stable
-
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Get month
         id: month
         run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
 
       - name: Cache cargo-audit
         id: cache-audit
-        uses: actions/cache@v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/bin/cargo-audit
           key: ${{ runner.os }}-cargo-audit-${{ steps.month.outputs.month }}
