@@ -4,15 +4,18 @@ All the changes made to runa are documented here.
 
 ## [0.15.7] - UNRELEASED
 
+### Changed
+- **Windows**: `rn.exe` now links the C runtime statically and no longer needs Visual C++ Redistributable.
+
 ### Internal
 - **Cargo**: Added `.cargo/config.toml` with `global-min-publish-age` set to 3 days. (New with rust 1.100)
 - **CI**:
     - Pinned all actions to their specific SHA hashes.
     - Added 3 day dependabot cooldown for cargo checks and a 7 day check for GitHub action checks.
-    - Replaced `dtolnay/rust-toolchain` action with runners preinstalled `rustup`.
-    - MSRV now reads rust-version from `Cargo.toml`.
+    - Replaced `dtolnay/rust-toolchain` action with the runner's preinstalled `rustup`.
+    - MSRV now reads `rust-version` from `Cargo.toml`.
     - Removed `Swatinem/rust-cache` action. CI now uses only GitHub's own actions.
-    - Tests run now on all targets the CI can execute.
+    - Tests now run on all targets the CI can execute.
 
 ---
 
