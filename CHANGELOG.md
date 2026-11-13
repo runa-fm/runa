@@ -4,6 +4,15 @@ All the changes made to runa are documented here.
 
 ## [0.15.7] - UNRELEASED
 
+### Changed
+- **CI**: Linux `gnu` release binaries now require `glibc 2.34` or newer. On older systems, use the `musl` binaries.
+
+### Internal
+- **Cargo**: Added `.cargo/config.toml` with `global-min-publish-age` set to 3 days. (New with rust 1.100)
+- **CI**:
+    - Pinned all actions to their specific SHA hashes.
+    - Removed `cross-rs` and use native rust builds on action runners.
+    - Added 3 day dependabot cooldown for cargo checks and a 7 day check for GitHub action checks.
 
 ---
 
