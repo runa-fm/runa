@@ -22,34 +22,43 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-x86_64-gnu
+            use_cross: true
           - target: aarch64-unknown-linux-gnu
-            os: ubuntu-24.04-arm
+            os: ubuntu-latest
             platform: linux-aarch64-gnu
+            use_cross: true
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             platform: linux-x86_64-musl
+            use_cross: true
           - target: aarch64-unknown-linux-musl
-            os: ubuntu-24.04-arm
+            os: ubuntu-latest
             platform: linux-aarch64-musl
+            use_cross: true
           - target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
             platform: linux-ppc64le-gnu
+            use_cross: true
 
           # Windows
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             platform: windows-x86_64
+            use_cross: false
           - target: aarch64-pc-windows-msvc
             os: windows-latest
             platform: windows-aarch64
+            use_cross: false
 
           # macOS
           - target: x86_64-apple-darwin
             os: macos-latest
             platform: macos-x86_64
+            use_cross: false
           - target: aarch64-apple-darwin
             os: macos-latest
             platform: macos-aarch64
+            use_cross: false
 
     env:
       RELEASE_BUILD: ${{ github.ref_type == 'tag' || github.event_name == 'workflow_dispatch' }}
@@ -59,6 +68,25 @@ jobs:
 
       - name: Install Rust
         run: rustup target add ${{ matrix.target }}
+
+      - name: Install cross
+        if: ${{ matrix.use_cross }}
+        env:
+          CROSS_VERSION: "v0.2.5"
+          PACKAGE_NAME: "cross-x86_64-unknown-linux-gnu.tar.gz"
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        run: |
+          INSTALL_DIR="$HOME/.local/bin"
+          mkdir -p "$INSTALL_DIR"
+
+          echo "Downloading cross $CROSS_VERSION using gh CLI..."
+          gh release download "$CROSS_VERSION" \
+            --repo cross-rs/cross \
+            --pattern "$PACKAGE_NAME" \
+            -D "$INSTALL_DIR"
+
+          tar -xzf "$INSTALL_DIR/$PACKAGE_NAME" -C "$INSTALL_DIR"
+          echo "$INSTALL_DIR" >> $GITHUB_PATH
 
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
@@ -70,20 +98,6 @@ jobs:
           ln -s $(which batcat) ~/.local/bin/bat
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-      - name: Install musl C compiler
-        if: endsWith(matrix.target, '-musl')
-        run: |
-          sudo apt-get install -y musl-tools
-          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
-        env:
-          TARGET: ${{ matrix.target }}
-
-      - name: Install ppc64le linker
-        if: matrix.target == 'powerpc64le-unknown-linux-gnu'
-        run: |
-          sudo apt-get install -y gcc-powerpc64le-linux-gnu
-          echo "CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER=powerpc64le-linux-gnu-gcc" >> "$GITHUB_ENV"
-
       - name: Install dependencies (macOS)
         if: runner.os == 'macOS'
         run: brew install fd bat
@@ -94,13 +108,23 @@ jobs:
 
       - name: Build
         id: build_step
-        run: cargo build --release --locked --target ${{ matrix.target }}
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross build --release --locked --target ${{ matrix.target }}
+          else
+            cargo build --release --locked --target ${{ matrix.target }}
+          fi
         shell: bash
 
       - name: Test
         id: test_step
-        if: matrix.target != 'powerpc64le-unknown-linux-gnu' && matrix.target != 'aarch64-pc-windows-msvc'
-        run: cargo test --release --locked --target ${{ matrix.target }}
+        if: matrix.target != 'aarch64-pc-windows-msvc'
+        run: |
+          if [ "${{ matrix.use_cross }}" = "true" ]; then
+            cross test --release --locked --target ${{ matrix.target }}
+          else
+            cargo test --release --locked --target ${{ matrix.target }}
+          fi
         shell: bash
 
       - name: Prepare binary (Linux/macOS)
