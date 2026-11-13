@@ -5,7 +5,7 @@ All the changes made to runa are documented here.
 ## [0.15.7] - UNRELEASED
 
 ### Changed
-- **CI**: Linux `gnu` release binaries now require `glibc 2.34` or newer. On older systems, use the `musl` binaries.
+- **CI**: Linux prebuilt `gnu` release binaries now require `glibc 2.34` or newer. On older systems, use the `musl` binaries.
 
 ### Internal
 - **Cargo**: Added `.cargo/config.toml` with `global-min-publish-age` set to 3 days. (New with rust 1.100)
