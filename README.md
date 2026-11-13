@@ -121,13 +121,15 @@ After downloading, add the `rn` (Linux/macOS) or `rn.exe` (Windows) binary to yo
 > **Checksum & Attestation Check:**  
 > You can verify the integrity of the release archives using the `SHA256SUMS.txt` file in the [Release](https://github.com/runa-fm/runa/releases) page.
 >
-> **Unix**
+> **Unix**:
+>
 > To check every downloaded archive in the current folder against SHA256SUMS.txt:
 > ```bash
 > sha256sum -c --ignore-missing SHA256SUMS.txt
 > ```
 >
 > **Windows**
+>
 > ```powershell
 > Get-FileHash runa-windows-x86_64.zip -Algorithm SHA256
 > ```
