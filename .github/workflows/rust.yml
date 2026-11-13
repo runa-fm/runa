@@ -70,6 +70,14 @@ jobs:
           ln -s $(which batcat) ~/.local/bin/bat
           echo "$HOME/.local/bin" >> $GITHUB_PATH
 
+      - name: Install musl C compiler
+        if: endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get install -y musl-tools
+          echo "CC_${TARGET//-/_}=musl-gcc" >> "$GITHUB_ENV"
+        env:
+          TARGET: ${{ matrix.target }}
+
       - name: Install ppc64le linker
         if: matrix.target == 'powerpc64le-unknown-linux-gnu'
         run: |
