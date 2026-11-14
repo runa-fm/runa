@@ -67,7 +67,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
-        run: rustup target add ${{ matrix.target }}
+        shell: bash
+        run: |
+          rustup update stable --no-self-update
+          rustup target add ${{ matrix.target }}
 
       - name: Install cross
         if: ${{ matrix.use_cross }}
@@ -168,15 +171,17 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup update stable --no-self-update
       - run: rustup component add clippy
       - name: Run Clippy
-        run: cargo clippy --all-targets --all-features -- -D warnings
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
 
   fmt:
     name: Formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: rustup update stable --no-self-update
       - run: rustup component add rustfmt
       - name: Check Formatting
         run: cargo fmt --all -- --check
