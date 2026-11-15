@@ -5,19 +5,19 @@
 
 pub(crate) mod assets;
 pub(crate) mod commands;
-pub(crate) mod dialog;
+pub(crate) mod dialog_layout;
 pub(crate) mod display;
 pub(crate) mod editor;
-pub(crate) mod general;
-pub(crate) mod input;
+mod general;
+pub(crate) mod keys;
 pub(crate) mod load;
-pub(crate) mod presets;
+mod presets;
 pub(crate) mod theme;
 
 pub(crate) use commands::Commands;
 pub(crate) use display::Display;
 pub(crate) use editor::Editor;
 pub(crate) use general::{General, InternalGeneral};
-pub(crate) use input::Keys;
+pub(crate) use keys::Keys;
 pub(crate) use load::Config;
 pub(crate) use theme::Theme;

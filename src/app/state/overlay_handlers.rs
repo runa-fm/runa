@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode::*, KeyEvent};
 use ratatui::layout::Alignment;
 
-use crate::app::overlays::{Overlay, OverlayKind};
+use crate::app::overlay_stack::{Overlay, OverlayKind};
 use crate::app::state::{AppState, KeypressResult};
 use crate::core::metadata::FileMetadataCache;
 
@@ -41,7 +41,7 @@ impl AppState {
 
     /// Refreshes the file info overlay if it is currently open.
     pub(crate) fn refresh_show_info_if_open(&mut self) {
-        if let Some(new_info) = self.selected_metadata_clone()
+        if let Some(new_info) = self.selected_file_info_clone()
             && let Some(info_slot) = self.overlays_mut().find_show_info_mut()
             && !Arc::ptr_eq(&new_info, info_slot)
         {
@@ -51,7 +51,7 @@ impl AppState {
 
     /// Shows the file info overlay for the currently selected entry.
     fn show_file_info(&mut self) {
-        if let Some(info) = self.selected_metadata_clone() {
+        if let Some(info) = self.selected_file_info_clone() {
             self.overlays_mut().push(Overlay::ShowInfo { info });
         }
     }
@@ -108,7 +108,7 @@ impl AppState {
         });
     }
 
-    fn selected_metadata_clone(&self) -> Option<Arc<FileMetadataCache>> {
-        self.metadata.selected_arc().map(Arc::clone)
+    fn selected_file_info_clone(&self) -> Option<Arc<FileMetadataCache>> {
+        self.file_info.selected_arc().map(Arc::clone)
     }
 }

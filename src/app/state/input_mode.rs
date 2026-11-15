@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use crossterm::event::{KeyCode::*, KeyEvent};
 
-use crate::app::overlays::OverlayKind;
+use crate::app::overlay_stack::OverlayKind;
 use crate::app::{
     actions::{ActionMode, InputMode},
     keymap::{Action, NavAction, PrefixCommand, SystemAction},

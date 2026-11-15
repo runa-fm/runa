@@ -12,7 +12,7 @@ use crate::app::{
     AppState,
     actions::{ActionMode, InputMode},
 };
-use crate::config::dialog::DialogSize;
+use crate::config::dialog_layout::DialogSize;
 use crate::ui::widgets::{self, DialogLayout};
 use crate::utils::path;
 

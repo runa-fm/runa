@@ -9,8 +9,8 @@ use ratatui::{
 
 use crate::app::AppState;
 use crate::config::{
-    dialog::{DialogPosition, DialogSize},
-    input::InputKeys,
+    dialog_layout::{DialogPosition, DialogSize},
+    keys::InputKeys,
 };
 use crate::core::metadata::FileMetadataCache;
 use crate::ui::widgets::{self, DialogLayout};

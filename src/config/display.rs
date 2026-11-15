@@ -10,9 +10,9 @@ use chrono::format::{Item, StrftimeItems};
 use ratatui::widgets::BorderType;
 use serde::{Deserialize, Deserializer};
 
-use crate::config::dialog::DialogPosition;
-use crate::config::input::InputKeyLists;
-use crate::core::command;
+use crate::config::commands;
+use crate::config::dialog_layout::DialogPosition;
+use crate::config::keys::InputKeyLists;
 
 /// Default date format of the sort column.
 const SORT_DATE_FORMAT: &str = "%b %e %H:%M";
@@ -429,7 +429,7 @@ impl PreviewOptions {
         }
 
         let lower = path.file_name()?.to_string_lossy().to_lowercase();
-        command::extensions(&lower).find_map(|ext| {
+        commands::extensions(&lower).find_map(|ext| {
             self.archive.get(ext).map(|entry| ArchivePreview {
                 args: &entry.0,
                 ext_parts: ext.matches('.').count() + 1,

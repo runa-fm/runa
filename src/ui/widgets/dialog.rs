@@ -13,7 +13,7 @@ use ratatui::{
 
 use crate::app::AppState;
 use crate::app::actions::ScrollState;
-use crate::config::dialog::{DialogPosition, DialogSize};
+use crate::config::dialog_layout::{DialogPosition, DialogSize};
 
 /// Struct to hold the dialog style.
 ///

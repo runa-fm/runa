@@ -22,13 +22,12 @@ use ratatui::text::Span;
 use crate::app::{
     Clipboard, NavState, ParentState, PreviewData, PreviewState,
     actions::{ActionContext, ActionMode, InputMode},
+    file_info::FileInfoState,
     keymap::{Action, Keymap, TabAction},
-    metadata::MetadataState,
-    overlays::{OverlayKind, OverlayStack},
+    overlay_stack::{OverlayKind, OverlayStack},
 };
-use crate::config::{Config, display::PreviewMethod};
+use crate::config::{Config, commands, display::PreviewMethod};
 use crate::core::{
-    command,
     listing::{DirListOptions, SortConfig},
     metadata::{FileMetadataCache, MetadataNeeds},
     preview::PreviewMode,
@@ -86,11 +85,11 @@ pub(crate) struct AppState {
     metrics: LayoutMetrics,
 
     nav: NavState,
-    actions: ActionContext,
     preview: PreviewState,
     parent: ParentState,
+    actions: ActionContext,
 
-    metadata: MetadataState,
+    file_info: FileInfoState,
 
     is_loading: bool,
 
@@ -133,7 +132,7 @@ impl AppState {
             actions: ActionContext::default(),
             preview: PreviewState::default(),
             parent: ParentState::default(),
-            metadata: MetadataState::new(),
+            file_info: FileInfoState::new(),
             is_loading: false,
             notification_time: None,
             nav_time: Throttler::new(),
@@ -199,8 +198,8 @@ impl AppState {
     }
 
     #[inline]
-    pub(crate) fn selected_metadata(&self) -> Option<&FileMetadataCache> {
-        self.metadata.selected()
+    pub(crate) fn selected_file_info(&self) -> Option<&FileMetadataCache> {
+        self.file_info.selected()
     }
 
     // Entry functions
@@ -255,27 +254,27 @@ impl AppState {
         if !status_info && !info_overlay {
             return;
         }
-        if !self.metadata.try_request(Timings::FILE_INFO_THROTTLE_MS) {
+        if !self.file_info.try_request(Timings::FILE_INFO_THROTTLE_MS) {
             return;
         }
 
         let Some(entry) = self.nav.selected_entry() else {
-            self.metadata.clear();
+            self.file_info.clear();
             return;
         };
 
-        if let Some(selected_cache) = self.metadata.selected_arc()
+        if let Some(selected_cache) = self.file_info.selected_arc()
             && entry.name() == selected_cache.name()
         {
             return;
         }
 
         let path = self.nav.current_dir().join(entry.name());
-        if self.metadata.is_pending_path(&path) {
+        if self.file_info.is_pending_path(&path) {
             return;
         }
 
-        let request_id = self.metadata.prepare_new_request();
+        let request_id = self.file_info.prepare_new_request();
         let date_format = self.config.display().info().date_format();
 
         let needs = self.metadata_needs();
@@ -291,8 +290,8 @@ impl AppState {
             })
             .is_ok()
         {
-            self.metadata.touch();
-            self.metadata.set_pending(request_id, path);
+            self.file_info.touch();
+            self.file_info.set_pending(request_id, path);
         }
     }
 
@@ -354,7 +353,7 @@ impl AppState {
         }
 
         // Metadata handler for file info and cache
-        if self.metadata.take_queued(Timings::FILE_INFO_THROTTLE_MS) {
+        if self.file_info.take_queued(Timings::FILE_INFO_THROTTLE_MS) {
             self.update_file_info_cache(workers);
             changed = true;
         }
@@ -504,12 +503,12 @@ impl AppState {
                 request_id,
                 tab_id: _tab_id,
             } => {
-                if self.metadata.matches_pending(request_id, &path) {
+                if self.file_info.matches_pending(request_id, &path) {
                     if path.parent() == Some(self.nav.current_dir()) {
-                        self.metadata.set_selected(Some(metadata));
+                        self.file_info.set_selected(Some(metadata));
                         self.refresh_show_info_if_open();
                     }
-                    self.metadata.clear_pending();
+                    self.file_info.clear_pending();
                 }
             }
 
@@ -803,7 +802,7 @@ impl AppState {
                     let target = std::path::absolute(&path).unwrap_or_else(|_| path.clone());
                     PreviewMode::Archive {
                         program: program.into(),
-                        args: command::expand_args(archive.args(), archive.ext_parts(), &target),
+                        args: commands::expand_args(archive.args(), archive.ext_parts(), &target),
                         dir: target.parent().map(Path::to_path_buf),
                     }
                 } else {
@@ -916,7 +915,7 @@ impl AppState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::overlays::Overlay;
+    use crate::app::overlay_stack::Overlay;
     use crate::core::FileEntry;
     use ratatui::layout::Alignment;
     use std::ffi::OsString;

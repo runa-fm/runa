@@ -8,8 +8,8 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::config::input::InputKeyLists;
-use crate::core::command::{self, LAST_EXTENSION, RunMode};
+use crate::config::commands::{self, LAST_EXTENSION, RunMode};
+use crate::config::keys::InputKeyLists;
 
 /// An editor command and whether it takes over the terminal.
 #[derive(Debug)]
@@ -79,7 +79,7 @@ impl Editor {
             return EditorCommand::program(entry, LAST_EXTENSION);
         }
 
-        for ext in command::extensions(&lower) {
+        for ext in commands::extensions(&lower) {
             if let Some(entry) = self.ext.get(ext) {
                 let ext_parts = ext.matches('.').count() + 1;
                 return EditorCommand::program(entry, ext_parts);

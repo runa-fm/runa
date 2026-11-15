@@ -14,14 +14,14 @@
 //! may require corresponding changes throughout state, response-handling code and UI.
 
 mod fileop;
-mod find;
-mod io;
-mod metadata;
-mod preview;
+mod finder;
+mod loader;
+mod metadata_reader;
+mod previewer;
 mod runner;
-mod sort;
+mod sorter;
 mod task;
-mod watch;
+mod watcher;
 
 pub(crate) use task::*;
 
@@ -117,17 +117,17 @@ impl Workers {
         let sort_queue = sort_rx.clone();
         let find_queue = find_rx.clone();
 
-        io::start(nav_io_rx, res_tx.clone(), Arc::clone(&cache));
-        io::start(parent_io_rx, res_tx.clone(), Arc::clone(&cache));
-        io::start(preview_dir_rx, res_tx.clone(), Arc::clone(&cache));
+        loader::start(nav_io_rx, res_tx.clone(), Arc::clone(&cache));
+        loader::start(parent_io_rx, res_tx.clone(), Arc::clone(&cache));
+        loader::start(preview_dir_rx, res_tx.clone(), Arc::clone(&cache));
 
-        sort::start(sort_rx, res_tx.clone(), Arc::clone(&cache));
-        preview::start(preview_file_rx, res_tx.clone());
-        metadata::start(metadata_rx, res_tx.clone());
-        find::start(find_rx, res_tx.clone());
+        sorter::start(sort_rx, res_tx.clone(), Arc::clone(&cache));
+        previewer::start(preview_file_rx, res_tx.clone());
+        metadata_reader::start(metadata_rx, res_tx.clone());
+        finder::start(find_rx, res_tx.clone());
         fileop::start(fileop_rx, res_tx.clone(), Arc::clone(&active_fileops));
         runner::start(runner_rx, res_tx.clone());
-        watch::start(watch_cmd_rx, res_tx.clone());
+        watcher::start(watch_cmd_rx, res_tx.clone());
 
         Self {
             nav_io_tx,

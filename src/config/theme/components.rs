@@ -5,7 +5,7 @@ use serde::Deserialize;
 
 use crate::config::{
     Theme,
-    dialog::{DialogPosition, DialogSize},
+    dialog_layout::{DialogPosition, DialogSize},
     theme::{ColorFallback, ColorPair, builtin_styles, deserialize_color_field},
 };
 

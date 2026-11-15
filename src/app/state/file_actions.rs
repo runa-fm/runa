@@ -28,8 +28,8 @@ use crate::app::{
     keymap::FileAction,
     state::{AppState, KeypressResult},
 };
+use crate::config::commands::{self, RunMode};
 use crate::config::editor::EditorCommand;
-use crate::core::command::{self, RunMode};
 use crate::core::workers::{CommandTask, Workers};
 use crate::utils::Timings;
 use crate::utils::path;
@@ -97,7 +97,7 @@ impl AppState {
                     let run_mode = RunMode::Background {
                         check_status: false,
                     };
-                    (command::SYSTEM_OPENER, args, run_mode)
+                    (commands::SYSTEM_OPENER, args, run_mode)
                 }
                 EditorCommand::Program {
                     args,
@@ -109,7 +109,7 @@ impl AppState {
                         self.push_overlay_message(msg, Timings::MESSAGE, None);
                         return KeypressResult::Continue;
                     };
-                    let args = command::expand_args(args, ext_parts, &path);
+                    let args = commands::expand_args(args, ext_parts, &path);
                     (binary.as_str(), args, run_mode)
                 }
             };
@@ -382,16 +382,16 @@ impl AppState {
         let dir = std::path::absolute(current_dir).unwrap_or_else(|_| current_dir.to_path_buf());
         let selected = self.nav.selected_entry().map(|e| e.name().to_os_string());
 
-        let args = if command::has_file_variables(cmd) {
+        let args = if commands::has_file_variables(cmd) {
             let Some(name) = &selected else {
                 let msg = format!("Command '{}' needs a selected file", user_command.name());
                 self.push_overlay_message(msg, Timings::MESSAGE, None);
                 return KeypressResult::Continue;
             };
 
-            command::fill_file_variables(cmd, command::LAST_EXTENSION, &dir.join(name))
+            commands::fill_file_variables(cmd, commands::LAST_EXTENSION, &dir.join(name))
         } else {
-            command::plain_args(cmd)
+            commands::plain_args(cmd)
         };
 
         let Ok(program) = which::which(binary) else {

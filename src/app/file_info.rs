@@ -1,6 +1,6 @@
-//! File metadata module for AppState usage.
+//! File info module for AppState usage.
 //!
-//! [MetadataState] struct to wrap the [FileMetadata](crate::core::metadata::FileMetadata) and manage the state of worker requests,
+//! [FileInfoState] struct to wrap the [FileMetadata](crate::core::metadata::FileMetadata) and manage the state of worker requests,
 //! pending paths, and selected file metadata.
 
 use std::path::{Path, PathBuf};
@@ -16,14 +16,14 @@ struct PendingRequest {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct MetadataState {
+pub(super) struct FileInfoState {
     request_id: u64,
     pending: Option<PendingRequest>,
     selected: Option<Arc<FileMetadataCache>>,
     last_request_time: Throttler,
 }
 
-impl MetadataState {
+impl FileInfoState {
     pub(super) fn new() -> Self {
         Self {
             request_id: 0,

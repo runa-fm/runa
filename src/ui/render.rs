@@ -18,7 +18,7 @@ use ratatui::{
 use crate::app::{
     AppState, Clipboard, LayoutMetrics,
     actions::{ActionMode, InputMode},
-    overlays::Overlay,
+    overlay_stack::Overlay,
 };
 use crate::core::workers::FileOpCounts;
 use crate::ui::{

@@ -17,7 +17,7 @@ use crate::core::{
 };
 use crate::utils::text::StrBuffer;
 
-/// Starts the io worker thread, wich listens to [LoadDirTask] and sends back to [WorkerResponse]
+/// Starts the io loader worker thread, wich listens to [LoadDirTask] and sends back to [WorkerResponse]
 pub(super) fn start(
     task_rx: Receiver<LoadDirTask>,
     res_tx: Sender<WorkerResponse>,

@@ -24,7 +24,7 @@ pub(super) use status::*;
 use ratatui::{style::Style, text::Span, widgets::Borders};
 
 use crate::app::AppState;
-use crate::config::dialog::DialogPosition;
+use crate::config::dialog_layout::DialogPosition;
 
 pub(super) fn get_dialog_style(
     app: &AppState,

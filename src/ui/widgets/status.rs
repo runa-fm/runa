@@ -57,7 +57,7 @@ pub(crate) fn draw_status_bar(
 
     if position == StatusPosition::Footer
         && display_cfg.info().status_bar()
-        && let Some(file_meta) = app.selected_metadata()
+        && let Some(file_meta) = app.selected_file_info()
     {
         let info_theme = theme.info();
         let segments = display_cfg.info().segments();
