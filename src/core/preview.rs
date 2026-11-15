@@ -1,6 +1,8 @@
-//! File and archive previews for runa.
+//! Preview conent logic.
 //!
-//! Reads the lines of a file preview and builds the tree rows of an archive listing.
+//! Builds what the preview pane will show for a file.
+//! Text lines from `bat` or the internal [safe_read_preview] or tree rows form an archive lister.
+//! Preview worker calls [load] once.
 
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
@@ -24,23 +26,34 @@ const TEMP_EXTS: &[&str] = &[
 
 /// Minimum number of lines shown in any preview
 const MIN_PREVIEW_LINES: usize = 3;
+
 /// Maximum file size allowed for preview (5gb)
 const MAX_PREVIEW_SIZE: u64 = 5_000 * 1024 * 1024;
+
 /// Number of bytes to peek from file start for header checks (eg. PNG, ZIP, etc..)
 const HEADER_PEEK_BYTES: usize = 8;
+
 /// Bytes to peek for null bytes in binary detections
 const BINARY_PEEK_BYTES: usize = 1024;
+
 /// Size of the buffer used to read files for previews.
 const READ_BUFFER_SIZE: usize = 64 * 1024;
+
 /// Maximum bytes kept per preview lines.
 /// Longer lines are cut to keep previews for minified files fast.
 const MAX_LINE_BYTES: usize = 1024;
 
 /// Message shown instead of a preview for anything that is not a regular file.
 const NOT_REGULAR_FILE_MSG: &str = "[Not a regular file - preview skipped]";
+
 /// Message shown instead of a preview for binary files.
 const BINARY_FILE_PREVIEW_MSG: &str = "[Binary file - preview hidden]";
 
+/// Supported modes for a file preview
+///
+/// Internal uses the builin [safe_read_preview] reader.
+/// Bat runs `bat` with set arguments.
+/// Archive runs the set lister programm with args in a dir and shows the paths as a tree.
 pub(crate) enum PreviewMode {
     Internal,
     Bat {
@@ -53,12 +66,20 @@ pub(crate) enum PreviewMode {
     },
 }
 
+/// Preview content for the preview pane.
 #[derive(Debug, Clone)]
 pub(crate) enum PreviewLines {
     Text(Vec<String>),
     Tree(Vec<TreeRow>),
 }
 
+/// Loads the preview content of a path and chooses the source by [PreviewMode].
+///
+/// Temp files get a notice, archives their tree rows (if enabled) and any failure falls back to
+/// [PreviewMode::Internal]
+///
+/// # Returns
+/// The preview lines and whenever the preview is at the end of content.
 pub(crate) fn load(
     path: &Path,
     mode: &PreviewMode,
@@ -109,6 +130,7 @@ pub(crate) fn load(
 /// Calculating the pane widht and clean the output to the widht of the pane
 /// by removing control characters, expanding tabs to 4 spaces,
 /// and truncating or padding the string to fit exactly.
+///
 /// # Returns
 /// A sanitized string that fits exactly within the specified pane width.
 fn sanitize_to_exact_width(line: &str, pane_width: usize) -> String {
@@ -304,6 +326,11 @@ fn is_temp_file(path: &Path) -> bool {
         .is_some_and(|name| name.ends_with('~') || name.starts_with("~$") || name.starts_with(".~"))
 }
 
+/// Lists the content of an archive as tree rows.
+///
+/// # Returns
+/// The archives tree or None if its not a regular file or the lister program fails. Will fallback
+/// to text.
 fn archive_rows(
     path: &Path,
     program: &OsStr,
@@ -323,12 +350,17 @@ fn archive_rows(
     Some(rows)
 }
 
+/// Cuts lines to max_lines
+///
+/// # Returns
+/// True when the lines are already at EOF.
 fn split_eof<T>(lines: &mut Vec<T>, max_lines: usize) -> bool {
     let is_eof = lines.len() <= max_lines;
     lines.truncate(max_lines);
     is_eof
 }
 
+/// One row of a tree preview.
 #[derive(Debug, Clone)]
 pub(crate) struct TreeRow {
     buf: Box<str>,
@@ -371,6 +403,11 @@ impl TreeRow {
     }
 }
 
+/// Builds the tree rows from a list of paths.
+///
+/// Each directory gets one row before the first entry.
+/// Paths under the same directories share the rows so paths should be grouped by directory.
+/// Ignores the leading `./`
 pub(crate) fn tree_rows(paths: &[String]) -> Vec<TreeRow> {
     let mut rows = Vec::with_capacity(paths.len());
     let mut open: Vec<&str> = Vec::new();

@@ -1,8 +1,7 @@
-//! Sorting, filtering, and display formatting for file entries in runa.
+//! Directory listing rules.
 //!
-//! The [Listing] struct holds pane width and rules for sorting and filtering entries,
-//! based on user preferences from the runa.toml configuration.
-//! Used to prepare file lists for display in each pane.
+//! Sorts and filters directory entries by [DirListOptions] and [SortConfig].
+//! The worker builds a [Listing] per request and applies it to the entries they read.
 
 use std::cmp::Ordering;
 use std::collections::HashSet;
@@ -22,6 +21,7 @@ use crate::core::{
 /// CachedMetaKey limit to prevent memory growth during sorting by metadata.
 const HARD_SORT_CACHE_LIMIT: usize = 40_000;
 
+/// Sort enum for metadata sorting.
 #[derive(Clone, Copy)]
 enum MetadataSortField {
     Size,
@@ -32,6 +32,7 @@ enum MetadataSortField {
 
 type MetaCache = DashMap<PathBuf, CachedMetaKey>;
 
+/// Directory listing options for filtering and sorting.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub(crate) struct DirListOptions {
     pub(crate) dirs_first: bool,
@@ -67,6 +68,10 @@ impl SortOrder {
     }
 }
 
+/// Configuration for sorting file entries.
+/// Hold the sorting mode and order.
+///
+/// Main sorting data used by [Listing] and all other relevant sorting mechanisms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct SortConfig {
     mode: SortMode,
@@ -143,6 +148,7 @@ impl Listing {
         }
     }
 
+    /// Determines the file entry priority for the sorting process based on listing options.
     #[inline]
     fn prio_for_entry(&self, entry: &FileEntry) -> u8 {
         if self.list.dirs_first && (entry.flags() & FileEntry::IS_DIR) != 0 {
@@ -153,6 +159,10 @@ impl Listing {
     }
 
     /// Sorts the given file entries in place according to the listing's settings.
+    /// Main sorting orchestrator for all sorting modes.
+    ///
+    /// # Returns
+    /// The sort column if metadata sorting was used or None if no metadata sorting.
     pub(crate) fn sort_entries(
         &self,
         directory_path: &Path,
@@ -204,6 +214,7 @@ impl Listing {
         }
     }
 
+    /// Sorts entries by name.
     fn sort_by_name(&self, entries: &mut [FileEntry]) {
         let sort_order = self.sort_config.order();
 
@@ -242,6 +253,8 @@ impl Listing {
         });
     }
 
+    /// Sorts entries by natural order.
+    /// Uses [natural_cmp_bytes] for comparison.
     fn sort_by_natural(&self, entries: &mut [FileEntry]) {
         let sort_order = self.sort_config.order();
         let case_insensitive = self.list.case_insensitive;
@@ -266,6 +279,8 @@ impl Listing {
         });
     }
 
+    /// Sorts entries by their file extension.
+    /// If extensions are equal, it then falls back to sorting by name.
     fn sort_by_extension(&self, entries: &mut [FileEntry]) {
         let sort_order = self.sort_config.order();
         let case_insensitive = self.list.case_insensitive;
@@ -297,6 +312,10 @@ impl Listing {
         });
     }
 
+    /// Sort entries by file metadata (size, modified, created, accessed).
+    ///
+    /// # Returns
+    /// The sort column that displays metadata values to the UI.
     fn sort_by_metadata(
         &self,
         directory_path: &Path,
@@ -398,6 +417,7 @@ impl Listing {
         new_column
     }
 
+    /// Filters the entries based on the listing options and if the entry is in the always_show set.
     pub(crate) fn filter_entries(&self, entries: &mut Vec<FileEntry>) {
         let mut hide = 0u8;
         if !self.list.show_hidden {
@@ -427,6 +447,11 @@ impl Listing {
     }
 }
 
+/// Converts an SystemTime option to a u128 key representing the number of nanoseconds
+/// since UNIX_EPOCH.
+///
+/// # Returns
+/// 0 if the SystemTime is None or the duration since UNIX_EPOCH.
 #[inline]
 fn system_time_to_key(system_time: Option<SystemTime>) -> u128 {
     system_time
@@ -435,6 +460,15 @@ fn system_time_to_key(system_time: Option<SystemTime>) -> u128 {
         .unwrap_or(0)
 }
 
+/// Natural comparison of two byte slices.
+///
+/// # Arguments
+/// * a - First byte slice
+/// * b - Second byte sice
+/// * fold_case - Compares case-insensitiely if true, otherwise case-sensitive.
+///
+/// # Returns
+/// The ordering of the two byte slices based on natural sorting.
 fn natural_cmp_bytes(a: &[u8], b: &[u8], fold_case: bool) -> Ordering {
     let mut i = 0usize;
     let mut j = 0usize;
