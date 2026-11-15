@@ -9,11 +9,18 @@ All the changes made to runa are documented here.
 
 ### Internal
 - **Cargo**: Added `.cargo/config.toml` with `global-min-publish-age` set to 3 days. (New with rust 1.100)
+- **Refactor**:
+    - Combined `formatter.rs` and `sort.rs` into a new `listing.rs` core module.
+    - Split `core/fs.rs` into `core/workers/fileop.rs` and `core/preview.rs`.
+    - Renamed every duplicating module file name to a unique name.
+    - Merged `core/command.rs` into `config/commands.rs`.
+    - Renamed all I/O worker channels and methods after the pane and renamed `core/workers/io.rs` to `core/workers/loader.rs`.
 - **CI**:
     - Pinned all actions to their specific SHA hashes.
     - Added 3 day dependabot cooldown for cargo checks and a 7 day check for GitHub action checks.
     - Replaced `dtolnay/rust-toolchain` action with the runner's preinstalled `rustup`.
     - MSRV now reads `rust-version` from `Cargo.toml`.
+    - Clippy now runs with `--locked`.
     - Removed `Swatinem/rust-cache` action. CI now uses only GitHub's own actions.
     - Tests now run on all targets the CI can execute.
 
