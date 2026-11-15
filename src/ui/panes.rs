@@ -23,7 +23,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::app::{AppState, Clipboard, PreviewData};
 use crate::config::{Display, Theme};
-use crate::core::{FileEntry, preview::ListingRow};
+use crate::core::{FileEntry, preview::TreeRow};
 use crate::ui::icons;
 use crate::utils::text::StrBuffer;
 
@@ -309,7 +309,7 @@ pub(super) fn draw_preview(
             );
         }
 
-        PreviewData::Listing(rows) => {
+        PreviewData::Tree(rows) => {
             let offset = app.preview().window_offset();
             let height = context.block.inner(context.area).height as usize;
             let guide_style = context.theme.archive_guide_style();
@@ -739,11 +739,7 @@ fn make_entry_row<'a>(
     ListItem::new(Line::from(spans)).style(bar_style)
 }
 
-fn make_tree_row<'a>(
-    row: &'a ListingRow,
-    context: &PaneContext,
-    guide_style: Style,
-) -> ListItem<'a> {
+fn make_tree_row<'a>(row: &'a TreeRow, context: &PaneContext, guide_style: Style) -> ListItem<'a> {
     let is_dir = row.is_dir();
     let mut style = context.styles.get_style(is_dir, false);
     if let Some(color) = context

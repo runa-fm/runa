@@ -12,7 +12,10 @@ use ratatui::style::Color;
 use ratatui::text::Text;
 
 use crate::app::actions::ScrollState;
-use crate::core::{FileEntry, preview::ListingRow, workers::PreviewLines};
+use crate::core::{
+    FileEntry,
+    preview::{PreviewLines, TreeRow},
+};
 use crate::utils::{text::StrBuffer, timings::Timings};
 
 /// Pages loaded above and below the visible part of a file preview.
@@ -28,7 +31,7 @@ pub(crate) enum PreviewData {
         sort_column: Option<Arc<StrBuffer>>,
     },
     File(Text<'static>),
-    Listing(Vec<ListingRow>),
+    Tree(Vec<TreeRow>),
     Empty,
 }
 
@@ -129,9 +132,9 @@ impl PreviewState {
                     Self::clear_reset_colors(&mut text);
                     (PreviewData::File(text), len)
                 }
-                PreviewLines::Listing(rows) => {
+                PreviewLines::Tree(rows) => {
                     let len = rows.len();
-                    (PreviewData::Listing(rows), len)
+                    (PreviewData::Tree(rows), len)
                 }
             };
             let total_lines = loaded_scroll + len;
@@ -229,7 +232,7 @@ impl PreviewState {
     pub(crate) fn needs_load(&self, preview_height: usize) -> bool {
         let len = match &self.data {
             PreviewData::File(text) => text.lines.len(),
-            PreviewData::Listing(rows) => rows.len(),
+            PreviewData::Tree(rows) => rows.len(),
             PreviewData::Directory { .. } | PreviewData::Empty => return false,
         };
 
@@ -248,7 +251,7 @@ impl PreviewState {
         let skip = self.scroll.offset().saturating_sub(self.loaded_scroll);
         match &self.data {
             PreviewData::File(text) => skip.min(text.lines.len().saturating_sub(1)),
-            PreviewData::Listing(rows) => skip.min(rows.len().saturating_sub(1)),
+            PreviewData::Tree(rows) => skip.min(rows.len().saturating_sub(1)),
             PreviewData::Directory { .. } => self.scroll.offset(),
             PreviewData::Empty => 0,
         }
@@ -266,7 +269,7 @@ impl PreviewState {
             PreviewData::File(text) => {
                 text.lines.drain(..skip);
             }
-            PreviewData::Listing(rows) => {
+            PreviewData::Tree(rows) => {
                 rows.drain(..skip);
             }
             PreviewData::Directory { .. } | PreviewData::Empty => {}
@@ -311,7 +314,7 @@ impl PreviewData {
         match self {
             PreviewData::Directory { entries, .. } => entries.is_empty(),
             PreviewData::File(text) => text.lines.is_empty(),
-            PreviewData::Listing(rows) => rows.is_empty(),
+            PreviewData::Tree(rows) => rows.is_empty(),
             PreviewData::Empty => true,
         }
     }

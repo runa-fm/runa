@@ -2,7 +2,6 @@
 //!
 //! This module contains the non-UI pieces used by runa:
 //! - [fm]: directory traversal (see [browse_dir](fm::browse_dir), [FileEntry]).
-//! - [fs]: filesystem functionality and sys-calls functions.
 //! - [listing]: sorting and filtering logic.
 //! - [workers]: background work and message passing back into the RunaRoot struct.
 //! - [preview]: file previews and archive tree rows.
@@ -14,7 +13,6 @@
 pub(crate) mod cache;
 pub(crate) mod command;
 pub(crate) mod fm;
-pub(crate) mod fs;
 pub(crate) mod listing;
 pub(crate) mod metadata;
 pub(crate) mod preview;

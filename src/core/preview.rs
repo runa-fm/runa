@@ -2,13 +2,25 @@
 //!
 //! Reads the lines of a file preview and builds the tree rows of an archive listing.
 
+use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{BufReader, ErrorKind, Read, Seek};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use unicode_width::UnicodeWidthChar;
 
+use crate::core::proc;
+use crate::utils::Timings;
 use crate::utils::os;
+
+const DENY: &[&str] = &["a", "lib", "ilk", "h5", "zip", "gz", "tar", "pdb"];
+
+#[rustfmt::skip]
+const TEMP_EXTS: &[&str] = &[
+    "crdownload", "part", "partial", "download", "opdownload",
+    "aria2", "tmp", "temp", "swp", "swo", "swx",
+];
 
 /// Minimum number of lines shown in any preview
 const MIN_PREVIEW_LINES: usize = 3;
@@ -29,12 +41,77 @@ const NOT_REGULAR_FILE_MSG: &str = "[Not a regular file - preview skipped]";
 /// Message shown instead of a preview for binary files.
 const BINARY_FILE_PREVIEW_MSG: &str = "[Binary file - preview hidden]";
 
+pub(crate) enum PreviewMode {
+    Internal,
+    Bat {
+        args: Vec<OsString>,
+    },
+    Archive {
+        program: OsString,
+        args: Vec<OsString>,
+        dir: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum PreviewLines {
+    Text(Vec<String>),
+    Tree(Vec<TreeRow>),
+}
+
+pub(crate) fn load(
+    path: &Path,
+    mode: &PreviewMode,
+    max_lines: usize,
+    pane_width: usize,
+    scroll: usize,
+) -> (PreviewLines, bool) {
+    let read_lines = max_lines + 1;
+
+    let mut lines = if is_temp_file(path) {
+        PreviewLines::Text(vec![sanitize_to_exact_width(
+            "[Temporary file - preview skipped]",
+            pane_width,
+        )])
+    } else if let PreviewMode::Archive { program, args, dir } = &mode
+        && let Some(rows) = archive_rows(path, program, args, dir.as_deref(), scroll, read_lines)
+    {
+        PreviewLines::Tree(rows)
+    } else {
+        PreviewLines::Text(match mode {
+            PreviewMode::Internal | PreviewMode::Archive { .. } => {
+                safe_read_preview(path, read_lines, pane_width, scroll)
+            }
+            PreviewMode::Bat { args } => {
+                if !os::is_regular_file(path) || is_preview_deny(path) {
+                    safe_read_preview(path, read_lines, pane_width, scroll)
+                } else {
+                    match proc::preview_bat(path, read_lines, args.as_slice(), scroll) {
+                        // Bat preview succeeded
+                        // If bat fails, fallback to internal preview
+                        // If bat is not installed or returns error, we fallback to internal preview
+                        Ok(lines) => lines,
+                        Err(_) => safe_read_preview(path, read_lines, pane_width, scroll),
+                    }
+                }
+            }
+        })
+    };
+
+    let is_eof = match &mut lines {
+        PreviewLines::Text(lines) => split_eof(lines, max_lines),
+        PreviewLines::Tree(rows) => split_eof(rows, max_lines),
+    };
+
+    (lines, is_eof)
+}
+
 /// Calculating the pane widht and clean the output to the widht of the pane
 /// by removing control characters, expanding tabs to 4 spaces,
 /// and truncating or padding the string to fit exactly.
 /// # Returns
 /// A sanitized string that fits exactly within the specified pane width.
-pub(crate) fn sanitize_to_exact_width(line: &str, pane_width: usize) -> String {
+fn sanitize_to_exact_width(line: &str, pane_width: usize) -> String {
     let mut out = String::with_capacity(pane_width);
     let mut current_w = 0;
 
@@ -204,15 +281,63 @@ pub(crate) fn safe_read_preview(
     }
 }
 
+/// Check for file extension to deny file previews
+fn is_preview_deny(path: &Path) -> bool {
+    match path.extension() {
+        Some(ext) => DENY.iter().any(|&s| ext == OsStr::new(s)),
+        None => false,
+    }
+}
+
+/// Checks if a file is likely a temporary file based on its extension or naming patterns.
+/// Will be used to exclude temp files from file previews.
+fn is_temp_file(path: &Path) -> bool {
+    if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
+        let ext = ext.to_ascii_lowercase();
+        if TEMP_EXTS.contains(&ext.as_str()) {
+            return true;
+        }
+    }
+
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|name| name.ends_with('~') || name.starts_with("~$") || name.starts_with(".~"))
+}
+
+fn archive_rows(
+    path: &Path,
+    program: &OsStr,
+    args: &[OsString],
+    dir: Option<&Path>,
+    scroll: usize,
+    read_lines: usize,
+) -> Option<Vec<TreeRow>> {
+    if !os::is_regular_file(path) {
+        return None;
+    }
+
+    let timeout = Duration::from_millis(Timings::PREVIEW_COMMAND_TIMEOUT_MS);
+    let paths = proc::preview_command(program, args, dir, scroll + read_lines, timeout).ok()?;
+    let mut rows = tree_rows(&paths);
+    rows.drain(..scroll.min(rows.len()));
+    Some(rows)
+}
+
+fn split_eof<T>(lines: &mut Vec<T>, max_lines: usize) -> bool {
+    let is_eof = lines.len() <= max_lines;
+    lines.truncate(max_lines);
+    is_eof
+}
+
 #[derive(Debug, Clone)]
-pub(crate) struct ListingRow {
+pub(crate) struct TreeRow {
     buf: Box<str>,
     name_len: usize,
     depth: usize,
     is_dir: bool,
 }
 
-impl ListingRow {
+impl TreeRow {
     fn new(name: &str, depth: usize, is_dir: bool) -> Self {
         let ext = name
             .rsplit_once('.')
@@ -246,7 +371,7 @@ impl ListingRow {
     }
 }
 
-pub(crate) fn tree_rows(paths: &[String]) -> Vec<ListingRow> {
+pub(crate) fn tree_rows(paths: &[String]) -> Vec<TreeRow> {
     let mut rows = Vec::with_capacity(paths.len());
     let mut open: Vec<&str> = Vec::new();
 
@@ -270,10 +395,10 @@ pub(crate) fn tree_rows(paths: &[String]) -> Vec<ListingRow> {
         open.truncate(shared);
 
         for dir in parts().skip(shared) {
-            rows.push(ListingRow::new(dir, open.len(), true));
+            rows.push(TreeRow::new(dir, open.len(), true));
             open.push(dir);
         }
-        rows.push(ListingRow::new(file, open.len(), false));
+        rows.push(TreeRow::new(file, open.len(), false));
     }
 
     rows

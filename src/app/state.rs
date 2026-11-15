@@ -31,9 +31,10 @@ use crate::core::{
     command,
     listing::{DirListOptions, SortConfig},
     metadata::{FileMetadataCache, MetadataNeeds},
+    preview::PreviewMode,
     workers::{
-        DirRequest, FindTask, LoadDirTask, MetadataTask, PreviewMode, PreviewTask, SortDirTask,
-        WorkerResponse, Workers,
+        DirRequest, FindTask, LoadDirTask, MetadataTask, PreviewTask, SortDirTask, WorkerResponse,
+        Workers,
     },
 };
 use crate::utils::timings::{Throttler, Timings};
@@ -1014,7 +1015,7 @@ mod tests {
         app.nav.update_from_worker(dir.clone(), entries, None, None);
 
         let id = app.preview.prepare_new_request(sub.clone());
-        let lines = crate::core::workers::PreviewLines::Text(vec!["hello".to_string()]);
+        let lines = crate::core::preview::PreviewLines::Text(vec!["hello".to_string()]);
         app.preview.update_content(lines, 10, 0, true, id);
         let shown = |app: &AppState| match app.preview().data() {
             crate::app::PreviewData::File(text) => text.lines[0].to_string(),
@@ -1135,7 +1136,7 @@ mod tests {
             "y stays shown until the file loads"
         );
 
-        let lines = crate::core::workers::PreviewLines::Text(vec!["x".to_string()]);
+        let lines = crate::core::preview::PreviewLines::Text(vec!["x".to_string()]);
         app.preview.update_content(lines, 10, 0, true, request_id);
         assert_eq!(
             app.shown_dirs(),

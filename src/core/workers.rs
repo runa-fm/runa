@@ -33,7 +33,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam_channel::{Receiver, Sender, TrySendError, bounded, unbounded};
 
 use crate::core::{
-    FileEntry, FindResult, cache::DirCache, metadata::FileMetadataCache, preview::ListingRow,
+    FileEntry, FindResult, cache::DirCache, metadata::FileMetadataCache, preview::PreviewLines,
 };
 use crate::utils::text::StrBuffer;
 
@@ -190,12 +190,6 @@ impl Workers {
     pub(crate) fn retarget_watch(&self, dirs: Vec<PathBuf>) {
         let _ = self.watch_cmd_tx.send(WatchCommand::Retarget(dirs));
     }
-}
-
-#[derive(Debug, Clone)]
-pub(crate) enum PreviewLines {
-    Text(Vec<String>),
-    Listing(Vec<ListingRow>),
 }
 
 /// Responses sent form the worker thread back to the main thread via the channel

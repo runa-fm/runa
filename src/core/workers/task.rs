@@ -12,18 +12,7 @@ use std::sync::atomic::AtomicBool;
 use crate::core::FileEntry;
 use crate::core::listing::{DirListOptions, SortConfig};
 use crate::core::metadata::MetadataNeeds;
-
-pub(crate) enum PreviewMode {
-    Internal,
-    Bat {
-        args: Vec<OsString>,
-    },
-    Archive {
-        program: OsString,
-        args: Vec<OsString>,
-        dir: Option<PathBuf>,
-    },
-}
+use crate::core::preview::PreviewMode;
 
 /// Represents a request to load a directory, either for navigation, parent directory, or preview.
 /// Holds the request type and an associated request ID for tracking.

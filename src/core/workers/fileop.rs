@@ -5,6 +5,8 @@
 
 use std::collections::HashSet;
 use std::ffi::OsString;
+use std::fs;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -12,7 +14,6 @@ use std::thread;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::core::fs;
 use crate::core::workers::{FileOperation, WorkerResponse};
 
 struct ActiveOpGuard(Arc<AtomicUsize>);
@@ -49,9 +50,9 @@ pub(super) fn start(
                         let res = if move_to_trash {
                             trash::delete(&p).map_err(|e| e.to_string())
                         } else if p.is_dir() {
-                            std::fs::remove_dir_all(&p).map_err(|e| e.to_string())
+                            fs::remove_dir_all(&p).map_err(|e| e.to_string())
                         } else {
-                            std::fs::remove_file(&p).map_err(|e| e.to_string())
+                            fs::remove_file(&p).map_err(|e| e.to_string())
                         };
 
                         if let Err(e) = res {
@@ -78,7 +79,7 @@ pub(super) fn start(
                     } else {
                         if target.exists() && !is_case_rename && overwrite {
                             if old.is_dir() && target.is_dir() {
-                                match fs::merge_dir(&old, &target, true) {
+                                match merge_dir(&old, &target, true) {
                                     Ok(()) => {
                                         focus_target = target.file_name().map(|n| n.to_os_string());
                                         Ok(())
@@ -92,9 +93,9 @@ pub(super) fn start(
                                 }
                             } else {
                                 let remove_res = if target.is_dir() {
-                                    std::fs::remove_dir_all(&target)
+                                    fs::remove_dir_all(&target)
                                 } else {
-                                    std::fs::remove_file(&target)
+                                    fs::remove_file(&target)
                                 };
 
                                 if let Err(e) = remove_res {
@@ -105,13 +106,13 @@ pub(super) fn start(
                                     ))
                                 } else {
                                     focus_target = target.file_name().map(|n| n.to_os_string());
-                                    fs::rename_with_fallback(&old, &target, old.is_dir())
+                                    rename_with_fallback(&old, &target, old.is_dir())
                                         .map_err(|e| e.to_string())
                                 }
                             }
                         } else {
                             focus_target = target.file_name().map(|n| n.to_os_string());
-                            fs::rename_with_fallback(&old, &target, old.is_dir())
+                            rename_with_fallback(&old, &target, old.is_dir())
                                 .map_err(|e| e.to_string())
                         }
                     }
@@ -124,7 +125,7 @@ pub(super) fn start(
                     let target = if overwrite {
                         path
                     } else {
-                        fs::get_unused_path(&path)
+                        get_unused_path(&path)
                     };
 
                     if target.exists() {
@@ -139,7 +140,7 @@ pub(super) fn start(
                                 ))
                             }
                         } else {
-                            let remove_res = std::fs::remove_file(&target);
+                            let remove_res = fs::remove_file(&target);
                             if let Err(e) = remove_res {
                                 Err(format!(
                                     "Could not remove existing file before create: {}: {}",
@@ -149,9 +150,9 @@ pub(super) fn start(
                             } else {
                                 focus_target = target.file_name().map(|n| n.to_os_string());
                                 if is_dir {
-                                    std::fs::create_dir_all(&target).map_err(|e| e.to_string())
+                                    fs::create_dir_all(&target).map_err(|e| e.to_string())
                                 } else {
-                                    std::fs::OpenOptions::new()
+                                    fs::OpenOptions::new()
                                         .write(true)
                                         .create_new(true)
                                         .open(&target)
@@ -163,9 +164,9 @@ pub(super) fn start(
                     } else {
                         focus_target = target.file_name().map(|n| n.to_os_string());
                         if is_dir {
-                            std::fs::create_dir_all(&target).map_err(|e| e.to_string())
+                            fs::create_dir_all(&target).map_err(|e| e.to_string())
                         } else {
-                            std::fs::OpenOptions::new()
+                            fs::OpenOptions::new()
                                 .write(true)
                                 .create_new(true)
                                 .open(&target)
@@ -185,7 +186,7 @@ pub(super) fn start(
 
                     for s in src {
                         if let Some(name) = s.file_name() {
-                            let target = fs::get_unused_path(&dest.join(name));
+                            let target = get_unused_path(&dest.join(name));
 
                             if let Some(ref ft) = focus_target
                                 && ft == name
@@ -194,19 +195,19 @@ pub(super) fn start(
                             }
 
                             if cut {
-                                if std::fs::rename(&s, &target).is_err() {
+                                if fs::rename(&s, &target).is_err() {
                                     let copy_res = if s.is_dir() {
-                                        fs::copy_recursive(&s, &target)
+                                        copy_recursive(&s, &target)
                                     } else {
-                                        std::fs::copy(&s, &target).map(|_| ())
+                                        fs::copy(&s, &target).map(|_| ())
                                     };
 
                                     match copy_res {
                                         Ok(_) => {
                                             let remove_res = if s.is_dir() {
-                                                std::fs::remove_dir_all(&s)
+                                                fs::remove_dir_all(&s)
                                             } else {
-                                                std::fs::remove_file(&s)
+                                                fs::remove_file(&s)
                                             };
 
                                             if let Err(err) = remove_res {
@@ -225,9 +226,9 @@ pub(super) fn start(
                                 }
                             } else {
                                 let res = if s.is_dir() {
-                                    fs::copy_recursive(&s, &target)
+                                    copy_recursive(&s, &target)
                                 } else {
-                                    std::fs::copy(&s, &target).map(|_| ())
+                                    fs::copy(&s, &target).map(|_| ())
                                 };
 
                                 if let Err(e) = res {
@@ -292,14 +293,202 @@ fn collect_modified_dirs(op: &FileOperation) -> Vec<PathBuf> {
     dirs.into_iter().collect()
 }
 
+/// Recursively copies files and directories from `src` to `dest`, with safety checks.
+///
+/// Safety checks prevent copying a directory into its own subdirectory,
+/// Returns an Error if such an operation is attempted.
+pub(crate) fn copy_recursive(src: &Path, dest: &Path) -> io::Result<()> {
+    let src_canon = src.canonicalize()?;
+    let dest_parent = dest
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Destination has no parent"))?;
+    let dest_parent_canon = dest_parent.canonicalize().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Destination parent does not exist",
+        )
+    })?;
+    let file_name = dest.file_name().ok_or_else(|| {
+        io::Error::new(io::ErrorKind::InvalidInput, "Destination has no file name")
+    })?;
+    let dest_canon = dest_parent_canon.join(file_name);
+
+    if dest_canon.starts_with(&src_canon) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Cannot copy a directory into its own subdirectory",
+        ));
+    }
+
+    copy_recursive_inner(src, dest)
+}
+
+/// Internal helper function to perform the actual recursive copy.
+/// Handles directories, files, and symbolic links appropriately.
+/// This function is called by [copy_recursive] after performing safety checks.
+fn copy_recursive_inner(src: &Path, dest: &Path) -> io::Result<()> {
+    let meta = fs::symlink_metadata(src)?;
+
+    if meta.is_dir() {
+        let entries = fs::read_dir(src)?;
+        fs::create_dir_all(dest)?;
+
+        for entry in entries {
+            let entry = entry?;
+            copy_recursive_inner(&entry.path(), &dest.join(entry.file_name()))?;
+        }
+    } else if meta.file_type().is_symlink() {
+        let target = fs::read_link(src)?;
+        #[cfg(windows)]
+        {
+            let is_dir_target = fs::metadata(src).map(|m| m.is_dir()).unwrap_or(false);
+
+            if is_dir_target {
+                std::os::windows::fs::symlink_dir(&target, dest)?;
+            } else {
+                std::os::windows::fs::symlink_file(&target, dest)?;
+            }
+        }
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(target, dest)?;
+        }
+    } else {
+        fs::copy(src, dest)?;
+    }
+
+    Ok(())
+}
+
+/// Finds the next available filename by appending _1, _2, etc. if the target exists
+///
+/// Example: "notes.txt" -> "notes_1.txt"
+pub(crate) fn get_unused_path(path: &Path) -> PathBuf {
+    if !path.exists() {
+        return path.to_path_buf();
+    }
+
+    let parent = path.parent().unwrap_or_else(|| Path::new(""));
+    let name = path.file_name().unwrap_or_default();
+
+    let stem = Path::new(name)
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy();
+
+    let ext = Path::new(name)
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+
+    let mut counter = 1;
+    loop {
+        let new_name = format!("{}_{}{}", stem, counter, ext);
+        let target = parent.join(new_name);
+        if !target.exists() {
+            return target;
+        }
+        counter += 1;
+    }
+}
+
+pub(crate) fn merge_dir(src: &Path, dst: &Path, overwrite: bool) -> io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+
+    if dst.starts_with(src) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Cannot move a directory into itself",
+        ));
+    }
+
+    for entry_res in fs::read_dir(src)? {
+        let entry = entry_res?;
+        let name = entry.file_name();
+        let src_path = entry.path();
+        let dst_path = dst.join(&name);
+
+        let file_type = entry.file_type()?;
+
+        if file_type.is_dir() {
+            if dst_path.exists() {
+                let dst_is_dir = fs::symlink_metadata(&dst_path)?.is_dir();
+
+                if dst_is_dir {
+                    merge_dir(&src_path, &dst_path, overwrite)?;
+
+                    let _ = fs::remove_dir(&src_path);
+                } else {
+                    if overwrite {
+                        fs::remove_file(&dst_path)?;
+                        rename_with_fallback(&src_path, &dst_path, true)?;
+                    } else {
+                        let unique = get_unused_path(&dst_path);
+                        rename_with_fallback(&src_path, &unique, true)?;
+                    }
+                }
+            } else {
+                rename_with_fallback(&src_path, &dst_path, true)?;
+            }
+        } else {
+            if dst_path.exists() {
+                let dst_is_dir = fs::symlink_metadata(&dst_path)?.is_dir();
+
+                if overwrite {
+                    if dst_is_dir {
+                        let unique = get_unused_path(&dst_path);
+                        rename_with_fallback(&src_path, &unique, false)?;
+                    } else {
+                        fs::remove_file(&dst_path)?;
+                        rename_with_fallback(&src_path, &dst_path, false)?;
+                    }
+                } else {
+                    let unique = get_unused_path(&dst_path);
+                    rename_with_fallback(&src_path, &unique, false)?;
+                }
+            } else {
+                rename_with_fallback(&src_path, &dst_path, false)?;
+            }
+        }
+    }
+
+    let _ = fs::remove_dir(src);
+
+    Ok(())
+}
+
+/// Helper function to safely handle EXDEV (Cross-device link) errors
+/// when moving files or directories between different drives/partitions.
+pub(crate) fn rename_with_fallback(src: &Path, dst: &Path, is_dir: bool) -> io::Result<()> {
+    match fs::rename(src, dst) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            if is_dir {
+                copy_recursive(src, dst)?;
+                fs::remove_dir_all(src)
+            } else {
+                fs::copy(src, dst)?;
+                fs::remove_file(src)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::core::workers::test_support::TEST_TIMEOUT;
     use crate::core::workers::{FileOperation, WorkerResponse, Workers};
+    use std::error;
+    use std::fs::File;
+    use tempfile::tempdir;
 
     #[test]
     fn fileop_worker_create_and_delete_file() -> Result<(), Box<dyn std::error::Error>> {
-        let temp = tempfile::tempdir()?;
+        let temp = tempdir()?;
         let file_path = temp.path().join("touch.txt");
         let temp_dir = temp.path().to_path_buf();
         let workers = Workers::spawn();
@@ -345,6 +534,106 @@ mod tests {
             }
             other => return Err(format!("Unexpected response: {:?}", other).into()),
         }
+        Ok(())
+    }
+
+    #[test]
+    fn path_collision_increments() -> Result<(), Box<dyn error::Error>> {
+        let dir = tempdir()?;
+        let path = dir.path().join("data.csv");
+
+        assert_eq!(get_unused_path(&path.clone()), path);
+
+        File::create(&path)?;
+        assert_eq!(
+            get_unused_path(&path.clone()),
+            dir.path().join("data_1.csv")
+        );
+
+        File::create(dir.path().join("data_1.csv"))?;
+        assert_eq!(get_unused_path(&path), dir.path().join("data_2.csv"));
+        Ok(())
+    }
+
+    #[test]
+    fn hidden_file_collision() -> Result<(), Box<dyn error::Error>> {
+        let dir = tempdir()?;
+        let path = dir.path().join(".config");
+
+        File::create(&path)?;
+        // Result: .config_1
+        assert_eq!(get_unused_path(&path), dir.path().join(".config_1"));
+        Ok(())
+    }
+
+    #[test]
+    fn get_unused_path_no_extension() -> Result<(), Box<dyn error::Error>> {
+        let dir = tempdir()?;
+        let folder_path = dir.path().join("my_folder");
+
+        File::create(&folder_path)?;
+        let path = get_unused_path(&folder_path);
+
+        // Should handle files/folders without extensions correctly
+        let fname = path
+            .file_name()
+            .ok_or("No file name in path")?
+            .to_str()
+            .ok_or("File name not valid UTF-8")?;
+        assert_eq!(fname, "my_folder_1");
+        Ok(())
+    }
+
+    #[test]
+    fn copy_recursive_basic_file() -> Result<(), Box<dyn error::Error>> {
+        let src_dir = tempdir()?;
+        let dest_dir = tempdir()?;
+
+        let file_path = src_dir.path().join("test.txt");
+        fs::write(&file_path, "hello runa")?;
+
+        let dest_path = dest_dir.path().join("test_copied.txt");
+        copy_recursive(&file_path, &dest_path)?;
+
+        assert!(dest_path.exists());
+        assert_eq!(fs::read_to_string(dest_path)?, "hello runa");
+        Ok(())
+    }
+
+    #[test]
+    fn copy_recursive_directory_structure() -> Result<(), Box<dyn error::Error>> {
+        let src_dir = tempdir()?;
+        let dest_base = tempdir()?;
+        let dest_path = dest_base.path().join("backup");
+
+        let subdir = src_dir.path().join("subdir");
+        fs::create_dir(&subdir)?;
+        fs::write(subdir.join("inner.txt"), "nested data")?;
+
+        copy_recursive(src_dir.path(), &dest_path)?;
+
+        assert!(dest_path.join("subdir").is_dir());
+        assert_eq!(
+            fs::read_to_string(dest_path.join("subdir").join("inner.txt"))?,
+            "nested data"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn copy_recursive_prevention_subdir() -> Result<(), Box<dyn error::Error>> {
+        let src_dir = tempdir()?;
+        let src_path = src_dir.path();
+
+        let dest_path = src_path.join("backup");
+
+        let result = copy_recursive(src_path, &dest_path);
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
+        assert!(err.to_string().contains("subdirectory"));
+
         Ok(())
     }
 }

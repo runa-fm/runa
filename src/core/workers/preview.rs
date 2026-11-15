@@ -2,20 +2,12 @@
 //!
 //! This module holds the implementation of the preview worker thread.
 
-use std::ffi::{OsStr, OsString};
-use std::path::Path;
 use std::thread;
-use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::core::{
-    fs,
-    preview::{self, ListingRow},
-    proc,
-    workers::{PreviewLines, PreviewMode, PreviewTask, WorkerResponse},
-};
-use crate::utils::{os, timings::Timings};
+use crate::core::preview;
+use crate::core::workers::{PreviewTask, WorkerResponse};
 
 pub(super) fn start(task_rx: Receiver<PreviewTask>, res_tx: Sender<WorkerResponse>) {
     thread::spawn(move || {
@@ -29,45 +21,8 @@ pub(super) fn start(task_rx: Receiver<PreviewTask>, res_tx: Sender<WorkerRespons
             tab_id,
         }) = task_rx.recv()
         {
-            let read_lines = max_lines + 1;
-
-            let mut lines = if fs::is_temp_file(&path) {
-                PreviewLines::Text(vec![preview::sanitize_to_exact_width(
-                    "[Temporary file - preview skipped]",
-                    pane_width,
-                )])
-            } else if let PreviewMode::Archive { program, args, dir } = &preview_mode
-                && let Some(rows) =
-                    archive_rows(&path, program, args, dir.as_deref(), scroll, read_lines)
-            {
-                PreviewLines::Listing(rows)
-            } else {
-                PreviewLines::Text(match preview_mode {
-                    PreviewMode::Internal | PreviewMode::Archive { .. } => {
-                        preview::safe_read_preview(&path, read_lines, pane_width, scroll)
-                    }
-                    PreviewMode::Bat { args } => {
-                        if !os::is_regular_file(&path) || fs::is_preview_deny(&path) {
-                            preview::safe_read_preview(&path, read_lines, pane_width, scroll)
-                        } else {
-                            match proc::preview_bat(&path, read_lines, args.as_slice(), scroll) {
-                                // Bat preview succeeded
-                                // If bat fails, fallback to internal preview
-                                // If bat is not installed or returns error, we fallback to internal preview
-                                Ok(lines) => lines,
-                                Err(_) => preview::safe_read_preview(
-                                    &path, read_lines, pane_width, scroll,
-                                ),
-                            }
-                        }
-                    }
-                })
-            };
-
-            let is_eof = match &mut lines {
-                PreviewLines::Text(lines) => split_eof(lines, max_lines),
-                PreviewLines::Listing(rows) => split_eof(rows, max_lines),
-            };
+            let (lines, is_eof) =
+                preview::load(&path, &preview_mode, max_lines, pane_width, scroll);
             let _ = res_tx.send(WorkerResponse::PreviewLoaded {
                 path,
                 lines,
@@ -80,35 +35,11 @@ pub(super) fn start(task_rx: Receiver<PreviewTask>, res_tx: Sender<WorkerRespons
     });
 }
 
-fn archive_rows(
-    path: &Path,
-    program: &OsStr,
-    args: &[OsString],
-    dir: Option<&Path>,
-    scroll: usize,
-    read_lines: usize,
-) -> Option<Vec<ListingRow>> {
-    if !os::is_regular_file(path) {
-        return None;
-    }
-
-    let timeout = Duration::from_millis(Timings::PREVIEW_COMMAND_TIMEOUT_MS);
-    let paths = proc::preview_command(program, args, dir, scroll + read_lines, timeout).ok()?;
-    let mut rows = preview::tree_rows(&paths);
-    rows.drain(..scroll.min(rows.len()));
-    Some(rows)
-}
-
-fn split_eof<T>(lines: &mut Vec<T>, max_lines: usize) -> bool {
-    let is_eof = lines.len() <= max_lines;
-    lines.truncate(max_lines);
-    is_eof
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::core::preview::{PreviewLines, PreviewMode};
     use crate::core::workers::test_support::{TEST_TAB_ID, TEST_TIMEOUT, bat_available};
-    use crate::core::workers::{PreviewLines, PreviewMode, PreviewTask, WorkerResponse, Workers};
+    use crate::core::workers::{PreviewTask, WorkerResponse, Workers};
 
     use std::fs;
     use tempfile::tempdir;
