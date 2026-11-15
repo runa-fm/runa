@@ -7,7 +7,7 @@
 //! of runa.
 //!
 //! Tasks come in from the app state and the runtime via channels, and results or errors.
-//! [WorkerResponse] go back the same way. All filesystem I/O and previews happen on these threads
+//! [WorkerResponse] go back the same way. All filesystem directory loadings and previews happen on these threads
 //!
 //! # Caution:
 //! This module is a central protocol boundary. Small changes (adding or editing variants, fields, or error handling)
@@ -39,11 +39,11 @@ use crate::utils::text::StrBuffer;
 
 /// Manages worker threads channels for different task types.
 pub(crate) struct Workers {
-    nav_io_tx: Sender<LoadDirTask>,
-    nav_io_queue: Receiver<LoadDirTask>,
+    nav_tx: Sender<LoadDirTask>,
+    nav_queue: Receiver<LoadDirTask>,
 
-    parent_io_tx: Sender<LoadDirTask>,
-    parent_io_queue: Receiver<LoadDirTask>,
+    parent_tx: Sender<LoadDirTask>,
+    parent_queue: Receiver<LoadDirTask>,
 
     preview_dir_tx: Sender<LoadDirTask>,
     preview_file_tx: Sender<PreviewTask>,
@@ -84,8 +84,8 @@ impl Workers {
     /// Create the worker set.
     ///
     /// Spawns one thread per worker:
-    /// - I/O (nav, parent, folder preview),
-    /// - sort,
+    /// - Directory loading (nav, parent, folder preview),
+    /// - sorting,
     /// - file preview,
     /// - metadata,
     /// - find,
@@ -96,8 +96,8 @@ impl Workers {
         let cache = Arc::new(DirCache::new());
         let active_fileops = Arc::new(AtomicUsize::new(0));
 
-        let (nav_io_tx, nav_io_rx) = bounded::<LoadDirTask>(1);
-        let (parent_io_tx, parent_io_rx) = bounded::<LoadDirTask>(1);
+        let (nav_tx, nav_rx) = bounded::<LoadDirTask>(1);
+        let (parent_tx, parent_rx) = bounded::<LoadDirTask>(1);
 
         let (preview_dir_tx, preview_dir_rx) = bounded::<LoadDirTask>(1);
         let (preview_file_tx, preview_file_rx) = bounded::<PreviewTask>(1);
@@ -112,13 +112,13 @@ impl Workers {
 
         let (res_tx, response_rx) = unbounded::<WorkerResponse>();
 
-        let nav_io_queue = nav_io_rx.clone();
-        let parent_io_queue = parent_io_rx.clone();
+        let nav_queue = nav_rx.clone();
+        let parent_queue = parent_rx.clone();
         let sort_queue = sort_rx.clone();
         let find_queue = find_rx.clone();
 
-        loader::start(nav_io_rx, res_tx.clone(), Arc::clone(&cache));
-        loader::start(parent_io_rx, res_tx.clone(), Arc::clone(&cache));
+        loader::start(nav_rx, res_tx.clone(), Arc::clone(&cache));
+        loader::start(parent_rx, res_tx.clone(), Arc::clone(&cache));
         loader::start(preview_dir_rx, res_tx.clone(), Arc::clone(&cache));
 
         sorter::start(sort_rx, res_tx.clone(), Arc::clone(&cache));
@@ -130,10 +130,10 @@ impl Workers {
         watcher::start(watch_cmd_rx, res_tx.clone());
 
         Self {
-            nav_io_tx,
-            nav_io_queue,
-            parent_io_tx,
-            parent_io_queue,
+            nav_tx,
+            nav_queue,
+            parent_tx,
+            parent_queue,
             preview_dir_tx,
             sort_tx,
             sort_queue,
@@ -171,12 +171,12 @@ impl Workers {
         }
     }
 
-    pub(crate) fn send_nav_io(&self, task: LoadDirTask) {
-        send_newest(&self.nav_io_tx, &self.nav_io_queue, task);
+    pub(crate) fn send_nav(&self, task: LoadDirTask) {
+        send_newest(&self.nav_tx, &self.nav_queue, task);
     }
 
-    pub(crate) fn send_parent_io(&self, task: LoadDirTask) {
-        send_newest(&self.parent_io_tx, &self.parent_io_queue, task);
+    pub(crate) fn send_parent(&self, task: LoadDirTask) {
+        send_newest(&self.parent_tx, &self.parent_queue, task);
     }
 
     pub(crate) fn send_sort(&self, task: SortDirTask) {

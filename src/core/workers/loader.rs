@@ -1,6 +1,6 @@
-//! IO worker thread module.
+//! Directory loader worker thread.
 //!
-//! Handles the nav, parent, preview I/O operations.
+//! Handles the nav, parent, preview directory loading.
 
 use std::sync::Arc;
 use std::thread;
@@ -17,7 +17,7 @@ use crate::core::{
 };
 use crate::utils::text::StrBuffer;
 
-/// Starts the io loader worker thread, wich listens to [LoadDirTask] and sends back to [WorkerResponse]
+/// Starts the loader worker thread, wich listens to [LoadDirTask] and sends back to [WorkerResponse]
 pub(super) fn start(
     task_rx: Receiver<LoadDirTask>,
     res_tx: Sender<WorkerResponse>,
@@ -119,7 +119,7 @@ mod tests {
         workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
 
         fs::File::create(temp.path().join("b.txt"))?;
-        workers.send_nav_io(load_task(temp.path(), DirRequest::Nav(40)));
+        workers.send_nav(load_task(temp.path(), DirRequest::Nav(40)));
         match workers.response_rx().recv_timeout(TEST_TIMEOUT)? {
             WorkerResponse::DirectoryLoaded { entries, .. } => assert_eq!(entries.len(), 2),
             other => return Err(format!("unexpected response: {other:?}").into()),
@@ -137,7 +137,7 @@ mod tests {
     fn worker_load_current_dir() -> Result<(), Box<dyn std::error::Error>> {
         let workers = Workers::spawn();
         let temp = tempdir()?;
-        let task_tx = &workers.nav_io_tx;
+        let task_tx = &workers.nav_tx;
         let res_rx = workers.response_rx();
 
         let temp_path = temp.path().join("test_dir");
@@ -186,7 +186,7 @@ mod tests {
         let requests_per_thread = 25;
 
         let workers = Workers::spawn();
-        let task_tx = &workers.nav_io_tx;
+        let task_tx = &workers.nav_tx;
         let res_rx = workers.response_rx();
 
         // Spawn threads to send requests in parallel

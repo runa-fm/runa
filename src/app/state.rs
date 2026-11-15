@@ -602,7 +602,7 @@ impl AppState {
         let request_id = self.nav.prepare_new_request();
         let sort_config = self.nav.sort_config();
         let sort_date_format: Arc<str> = Arc::from(self.config.display().sort_date_format());
-        workers.send_nav_io(LoadDirTask {
+        workers.send_nav(LoadDirTask {
             path: self.nav.current_dir().to_path_buf(),
             focus,
             list: self.dir_list_options(),
@@ -661,7 +661,7 @@ impl AppState {
         let parent_path_buf = parent_path.to_path_buf();
         let sort_date_format: Arc<str> = Arc::from(self.config.display().sort_date_format());
         let request_id = self.parent.prepare_new_request(&parent_path_buf);
-        workers.send_parent_io(LoadDirTask {
+        workers.send_parent(LoadDirTask {
             path: parent_path_buf,
             focus: None,
             list: self.dir_list_options(),
