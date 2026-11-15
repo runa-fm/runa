@@ -10,9 +10,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
 use crate::core::FileEntry;
-use crate::core::cache::DirListOptions;
+use crate::core::listing::{DirListOptions, SortConfig};
 use crate::core::metadata::MetadataNeeds;
-use crate::core::sort::SortConfig;
 
 pub(crate) enum PreviewMode {
     Internal,

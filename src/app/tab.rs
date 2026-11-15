@@ -11,7 +11,7 @@ use std::path::Path;
 use ratatui::text::Span;
 
 use crate::app::{AppContainer, AppState, KeypressResult, keymap::TabAction};
-use crate::core::{sort::SortConfig, workers::Workers};
+use crate::core::{listing::SortConfig, workers::Workers};
 use crate::utils::{Timings, path};
 
 /// Maximum number of tabs runa opens.

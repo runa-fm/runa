@@ -9,19 +9,13 @@ use std::time::Instant;
 
 use dashmap::{DashMap, mapref::entry::Entry};
 
-use crate::core::{FileEntry, sort::SortConfig};
+use crate::core::{
+    FileEntry,
+    listing::{DirListOptions, SortConfig},
+};
 use crate::utils::text::StrBuffer;
 
 const DIR_CACHE_CAP: usize = 30;
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub(crate) struct DirListOptions {
-    pub(crate) dirs_first: bool,
-    pub(crate) show_hidden: bool,
-    pub(crate) show_symlink: bool,
-    pub(crate) show_system: bool,
-    pub(crate) case_insensitive: bool,
-}
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 struct DirCacheKey {

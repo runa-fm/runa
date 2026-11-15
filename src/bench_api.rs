@@ -20,11 +20,11 @@ use dashmap::DashMap;
 
 use crate::app::AppState;
 use crate::config::Config;
-use crate::core::cache::{DirCache, DirListOptions};
+use crate::core::cache::DirCache;
+use crate::core::listing::{DirListOptions, SortConfig, SortMode, SortOrder};
 use crate::core::metadata::CachedMetaKey;
-use crate::core::sort::{SortConfig, SortMode, SortOrder};
 use crate::core::workers::Workers;
-use crate::core::{FileEntry, Formatter, fm, preview};
+use crate::core::{FileEntry, Listing, fm, preview};
 use crate::runtime::POLL_INTERVAL;
 use crate::utils::text::StrBuffer;
 
@@ -120,8 +120,8 @@ fn list_options() -> DirListOptions {
     }
 }
 
-fn formatter_for(mode: SortMode) -> Formatter {
-    Formatter::new(
+fn listing_for(mode: SortMode) -> Listing {
+    Listing::new(
         list_options(),
         SortConfig::from((mode, SortOrder::Ascending)),
         Arc::new(HashSet::new()),
@@ -172,9 +172,9 @@ impl EntryFixture {
     }
 }
 
-/// Sorts generated entries with the formatter.
+/// Sorts generated entries with the listing.
 pub struct SortFixture {
-    formatter: Formatter,
+    listing: Listing,
     entries: Vec<FileEntry>,
     metadata: DashMap<PathBuf, CachedMetaKey>,
 }
@@ -183,7 +183,7 @@ impl SortFixture {
     pub fn new(by: SortBy, count: usize) -> Self {
         let entries = build_entries(synthetic_names(count));
         Self {
-            formatter: formatter_for(by.mode()),
+            listing: listing_for(by.mode()),
             metadata: synthetic_metadata(&entries),
             entries,
         }
@@ -194,7 +194,7 @@ impl SortFixture {
     }
 
     pub fn run(&self, input: &mut Entries) -> usize {
-        let column = self.formatter.sort_entries(
+        let column = self.listing.sort_entries(
             Path::new(SYNTHETIC_DIR),
             &mut input.0,
             DATE_FORMAT,
@@ -206,14 +206,14 @@ impl SortFixture {
 
 /// Filters generated entries, which runs before every sort.
 pub struct FilterFixture {
-    formatter: Formatter,
+    listing: Listing,
     entries: Vec<FileEntry>,
 }
 
 impl FilterFixture {
     pub fn new(count: usize) -> Self {
         Self {
-            formatter: formatter_for(SortMode::Natural),
+            listing: listing_for(SortMode::Natural),
             entries: build_entries(synthetic_names(count)),
         }
     }
@@ -223,7 +223,7 @@ impl FilterFixture {
     }
 
     pub fn run(&self, input: &mut Entries) -> usize {
-        self.formatter.filter_entries(&mut input.0);
+        self.listing.filter_entries(&mut input.0);
         input.0.len()
     }
 }
@@ -308,14 +308,14 @@ impl CacheFixture {
 /// Metadata sorts read the metadata of every entry, like the worker.
 pub struct LoadFixture {
     dir: PathBuf,
-    formatter: Formatter,
+    listing: Listing,
 }
 
 impl LoadFixture {
     pub fn new(dir: &Path, by: SortBy) -> Self {
         Self {
             dir: dir.to_path_buf(),
-            formatter: formatter_for(by.mode()),
+            listing: listing_for(by.mode()),
         }
     }
 
@@ -330,9 +330,9 @@ impl LoadFixture {
             return Entries(Vec::new());
         };
         let metadata = DashMap::with_capacity(entries.len());
-        self.formatter.filter_entries(&mut entries);
+        self.listing.filter_entries(&mut entries);
         let _ = self
-            .formatter
+            .listing
             .sort_entries(&self.dir, &mut entries, DATE_FORMAT, &metadata);
         Entries(entries)
     }

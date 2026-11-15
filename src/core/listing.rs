@@ -1,6 +1,6 @@
 //! Sorting, filtering, and display formatting for file entries in runa.
 //!
-//! The [Formatter] struct holds pane width and rules for sorting and filtering entries,
+//! The [Listing] struct holds pane width and rules for sorting and filtering entries,
 //! based on user preferences from the runa.toml configuration.
 //! Used to prepare file lists for display in each pane.
 
@@ -16,9 +16,7 @@ use dashmap::DashMap;
 
 use crate::core::{
     FileEntry,
-    cache::DirListOptions,
     metadata::{self, CachedMetaKey, TimeFormatCtx, format_file_size, format_file_time},
-    sort::{SortConfig, SortMode, SortOrder},
 };
 
 /// CachedMetaKey limit to prevent memory growth during sorting by metadata.
@@ -34,16 +32,87 @@ enum MetadataSortField {
 
 type MetaCache = DashMap<PathBuf, CachedMetaKey>;
 
-/// Formatter struct to handle sorting, filtering, and formatting of file entries
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub(crate) struct DirListOptions {
+    pub(crate) dirs_first: bool,
+    pub(crate) show_hidden: bool,
+    pub(crate) show_symlink: bool,
+    pub(crate) show_system: bool,
+    pub(crate) case_insensitive: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum SortMode {
+    Name,
+    Modified,
+    Created,
+    Accessed,
+    Size,
+    Extension,
+    Natural,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum SortOrder {
+    Ascending,
+    Descending,
+}
+
+impl SortOrder {
+    pub(crate) fn toggle(self) -> Self {
+        match self {
+            SortOrder::Ascending => SortOrder::Descending,
+            SortOrder::Descending => SortOrder::Ascending,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct SortConfig {
+    mode: SortMode,
+    order: SortOrder,
+}
+
+impl Default for SortConfig {
+    fn default() -> Self {
+        Self {
+            mode: SortMode::Natural,
+            order: SortOrder::Ascending,
+        }
+    }
+}
+
+impl From<(SortMode, SortOrder)> for SortConfig {
+    fn from((mode, order): (SortMode, SortOrder)) -> Self {
+        Self { mode, order }
+    }
+}
+
+impl SortConfig {
+    crate::getters!(
+        mode: SortMode,
+        order: SortOrder,
+    );
+
+    pub(crate) fn set_mode(&mut self, mode: SortMode) {
+        self.mode = mode;
+    }
+
+    pub(crate) fn set_order(&mut self, order: SortOrder) {
+        self.order = order
+    }
+}
+
+/// Listing struct to handle sorting, filtering, and formatting of file entries
 /// based on user preferences.
-pub(crate) struct Formatter {
+pub(crate) struct Listing {
     list: DirListOptions,
     sort_config: SortConfig,
     always_show: Option<Arc<HashSet<OsString>>>,
     always_show_lowercase: Option<Arc<HashSet<String>>>,
 }
 
-impl Formatter {
+impl Listing {
     const PRIO_DIR: u8 = 0;
     const PRIO_FILE: u8 = 1;
 
@@ -83,7 +152,7 @@ impl Formatter {
         }
     }
 
-    /// Sorts the given file entries in place according to the formatter's settings.
+    /// Sorts the given file entries in place according to the listing's settings.
     pub(crate) fn sort_entries(
         &self,
         directory_path: &Path,
@@ -436,7 +505,7 @@ fn natural_cmp_bytes(a: &[u8], b: &[u8], fold_case: bool) -> Ordering {
     a.len().cmp(&b.len())
 }
 
-/// Formatter integration tests
+/// Listing integration tests
 #[cfg(test)]
 mod tests {
 
@@ -447,7 +516,7 @@ mod tests {
     use tempfile::tempdir;
 
     #[test]
-    fn formatter_filters_entries_by_flags() {
+    fn listing_filters_entries_by_flags() {
         let normal = FileEntry::new(OsString::from("normal.txt"), 0, None);
         let hidden = FileEntry::new(OsString::from(".hidden"), FileEntry::IS_HIDDEN, None);
         let system = FileEntry::new(OsString::from("system.sys"), FileEntry::IS_SYSTEM, None);
@@ -473,7 +542,7 @@ mod tests {
         };
         let short_config = SortConfig::default();
 
-        let fmt = Formatter::new(list_hide, short_config, Arc::new(HashSet::new()));
+        let fmt = Listing::new(list_hide, short_config, Arc::new(HashSet::new()));
         fmt.filter_entries(&mut entries);
 
         assert_eq!(entries.len(), 1);
@@ -494,7 +563,7 @@ mod tests {
             case_insensitive: true,
         };
 
-        let fmt = Formatter::new(list_show, short_config, Arc::new(HashSet::new()));
+        let fmt = Listing::new(list_show, short_config, Arc::new(HashSet::new()));
         fmt.filter_entries(&mut entries);
         assert_eq!(entries.len(), 4);
         assert!(entries.iter().any(|e| e.name_str() == ".hidden"));
@@ -504,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_by_name() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_by_name() -> Result<(), Box<dyn std::error::Error>> {
         let entry1 = FileEntry::new(OsString::from("fileB.txt"), 0, None);
         let entry2 = FileEntry::new(OsString::from("fileA.txt"), 0, None);
         let entry3 = FileEntry::new(OsString::from("FileC.txt"), 0, None);
@@ -512,7 +581,7 @@ mod tests {
 
         let meta_cache = DashMap::new();
 
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -528,7 +597,7 @@ mod tests {
         assert_eq!(names, vec!["FileC.txt", "fileA.txt", "fileB.txt"]);
 
         let mut entries = vec![entry1, entry2, entry3];
-        let fmt_ci = Formatter::new(
+        let fmt_ci = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -546,7 +615,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_by_extension() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_by_extension() -> Result<(), Box<dyn std::error::Error>> {
         let entry1 = FileEntry::new(OsString::from("fileB.txt"), 0, None);
         let entry2 = FileEntry::new(OsString::from("fileA.md"), 0, None);
         let entry3 = FileEntry::new(OsString::from("FileC.txt"), 0, None);
@@ -560,7 +629,7 @@ mod tests {
 
         let meta_cache = DashMap::new();
 
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -579,7 +648,7 @@ mod tests {
         );
 
         let mut entries = vec![entry1, entry2, entry3, entry4];
-        let fmt_ci = Formatter::new(
+        let fmt_ci = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -600,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_by_natural() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_by_natural() -> Result<(), Box<dyn std::error::Error>> {
         let entry1 = FileEntry::new(OsString::from("file10.txt"), 0, None);
         let entry2 = FileEntry::new(OsString::from("file2.txt"), 0, None);
         let entry3 = FileEntry::new(OsString::from("File1.txt"), 0, None);
@@ -608,7 +677,7 @@ mod tests {
 
         let meta_cache = DashMap::new();
 
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -624,7 +693,7 @@ mod tests {
         assert_eq!(names, vec!["File1.txt", "file2.txt", "file10.txt"]);
 
         let mut entries = vec![entry1, entry2, entry3];
-        let fmt_ci = Formatter::new(
+        let fmt_ci = Listing::new(
             DirListOptions {
                 dirs_first: false,
                 show_hidden: true,
@@ -642,7 +711,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_by_size() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_by_size() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempdir()?;
         let path1 = temp_dir.path().join("small.txt");
         let path2 = temp_dir.path().join("medium.txt");
@@ -655,7 +724,7 @@ mod tests {
         File::create(&path3)?.write_all(b"large content that is bigger")?;
 
         let mut entries = fm::browse_dir(temp_dir.path())?;
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: true,
                 show_hidden: true,
@@ -673,7 +742,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_by_modified() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_by_modified() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempdir()?;
         let path1 = temp_dir.path().join("old.txt");
         let path2 = temp_dir.path().join("newer.txt");
@@ -689,7 +758,7 @@ mod tests {
         filetime::set_file_mtime(&path3, filetime::FileTime::from_unix_time(3000, 0))?;
 
         let mut entries = fm::browse_dir(temp_dir.path())?;
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: true,
                 show_hidden: true,
@@ -707,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn formatter_sort_modified_with_dirs_first() -> Result<(), Box<dyn std::error::Error>> {
+    fn listing_sort_modified_with_dirs_first() -> Result<(), Box<dyn std::error::Error>> {
         let temp_dir = tempdir()?;
         let dir_path = temp_dir.path().join("aaa_old_dir");
         let file_path = temp_dir.path().join("bbb_new_file.txt");
@@ -722,7 +791,7 @@ mod tests {
 
         let mut entries = fm::browse_dir(temp_dir.path())?;
 
-        let fmt = Formatter::new(
+        let fmt = Listing::new(
             DirListOptions {
                 dirs_first: true,
                 show_hidden: true,

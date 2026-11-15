@@ -11,7 +11,7 @@ use crossbeam_channel::{Receiver, Sender};
 use dashmap::DashMap;
 
 use crate::core::{
-    FileEntry, Formatter,
+    FileEntry, Listing,
     cache::DirCache,
     workers::{SortDirTask, WorkerResponse},
 };
@@ -38,10 +38,10 @@ pub(super) fn start(
             let mut entries_vec = entries.to_vec();
             let meta_cache = DashMap::with_capacity(entries.len());
 
-            let formatter = Formatter::new(list.clone(), sort_config, always_show);
-            formatter.filter_entries(&mut entries_vec);
+            let listing = Listing::new(list.clone(), sort_config, always_show);
+            listing.filter_entries(&mut entries_vec);
             let sort_column =
-                formatter.sort_entries(&path, &mut entries_vec, &sort_date_format, &meta_cache);
+                listing.sort_entries(&path, &mut entries_vec, &sort_date_format, &meta_cache);
 
             let entries_arc: Arc<[FileEntry]> = Arc::from(entries_vec);
             let sort_column_arc: Option<Arc<StrBuffer>> =

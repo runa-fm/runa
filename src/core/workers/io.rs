@@ -12,7 +12,7 @@ use dashmap::DashMap;
 use crate::core::{
     cache::DirCache,
     fm::{self, FileEntry},
-    formatter::Formatter,
+    listing::Listing,
     workers::{LoadDirTask, WorkerResponse},
 };
 use crate::utils::text::StrBuffer;
@@ -39,10 +39,10 @@ pub(super) fn start(
             match fm::browse_dir(&path) {
                 Ok(mut entries) => {
                     let meta_cache = DashMap::with_capacity(entries.len());
-                    let formatter = Formatter::new(list.clone(), sort_config, always_show);
-                    formatter.filter_entries(&mut entries);
+                    let listing = Listing::new(list.clone(), sort_config, always_show);
+                    listing.filter_entries(&mut entries);
                     let sort_column =
-                        formatter.sort_entries(&path, &mut entries, &sort_date_format, &meta_cache);
+                        listing.sort_entries(&path, &mut entries, &sort_date_format, &meta_cache);
 
                     let entries_arc: Arc<[FileEntry]> = Arc::from(entries);
                     let sort_column_arc: Option<Arc<StrBuffer>> =
@@ -81,8 +81,7 @@ pub(super) fn start(
 
 #[cfg(test)]
 mod tests {
-    use crate::core::cache::DirListOptions;
-    use crate::core::sort::SortConfig;
+    use crate::core::listing::{DirListOptions, SortConfig};
     use crate::core::workers::test_support::{TEST_TAB_ID, TEST_TIMEOUT, test_list_opts};
     use crate::core::workers::{DirRequest, LoadDirTask, WorkerResponse, Workers};
 

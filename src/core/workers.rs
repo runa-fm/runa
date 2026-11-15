@@ -278,7 +278,7 @@ fn send_newest<T>(tx: &Sender<T>, queue: &Receiver<T>, task: T) {
 mod test_support {
     use std::time::Duration;
 
-    use crate::core::cache::DirListOptions;
+    use crate::core::listing::DirListOptions;
 
     pub(super) const TEST_TIMEOUT: Duration = Duration::from_secs(15);
 

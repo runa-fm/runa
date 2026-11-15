@@ -21,8 +21,8 @@ use crate::app::{
     keymap::{Action, NavAction, PrefixCommand, SystemAction},
     state::{AppState, KeypressResult},
 };
+use crate::core::listing::{SortConfig, SortOrder};
 use crate::core::proc;
-use crate::core::sort::{SortConfig, SortOrder};
 use crate::core::workers::Workers;
 use crate::utils::{os, path};
 

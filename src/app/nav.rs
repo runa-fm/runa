@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use crate::app::Clipboard;
-use crate::core::{FileEntry, sort::SortConfig};
+use crate::core::{FileEntry, listing::SortConfig};
 use crate::utils::{path, text::StrBuffer};
 
 const MAX_SAVED_POSITIONS: usize = 100;

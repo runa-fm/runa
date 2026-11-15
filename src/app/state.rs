@@ -28,10 +28,9 @@ use crate::app::{
 };
 use crate::config::{Config, display::PreviewMethod};
 use crate::core::{
-    cache::DirListOptions,
     command,
+    listing::{DirListOptions, SortConfig},
     metadata::{FileMetadataCache, MetadataNeeds},
-    sort::SortConfig,
     workers::{
         DirRequest, FindTask, LoadDirTask, MetadataTask, PreviewMode, PreviewTask, SortDirTask,
         WorkerResponse, Workers,
