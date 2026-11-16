@@ -88,6 +88,7 @@ jobs:
         env:
           CROSS_VERSION: "v0.2.5"
           PACKAGE_NAME: "cross-x86_64-unknown-linux-gnu.tar.gz"
+          CROSS_SHA256: "642375d1bcf3bd88272c32ba90e999f3d983050adf45e66bd2d3887e8e838bad"
           GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
         run: |
           INSTALL_DIR="$HOME/.local/bin"
@@ -99,6 +100,7 @@ jobs:
             --pattern "$PACKAGE_NAME" \
             -D "$INSTALL_DIR"
 
+          echo "$CROSS_SHA256  $INSTALL_DIR/$PACKAGE_NAME" | sha256sum -c
           tar -xzf "$INSTALL_DIR/$PACKAGE_NAME" -C "$INSTALL_DIR"
           echo "$INSTALL_DIR" >> $GITHUB_PATH
 
@@ -219,7 +221,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install cargo-audit
-        run: cargo install cargo-audit
+        run: |
+          rustup update stable --no-self-update
+          cargo install cargo-audit
 
       - name: Run Audit
         run: cargo audit --deny warnings

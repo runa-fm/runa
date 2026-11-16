@@ -17,6 +17,7 @@ All the changes made to runa are documented here.
     - Renamed all I/O worker channels and methods after the pane and renamed `core/workers/io.rs` to `core/workers/loader.rs`.
 - **CI**:
     - Pinned all actions to their specific SHA hashes.
+    - `cross` install step is now verified against a pinned SHA-256 checksum.
     - Added 7 day dependabot cooldown for cargo checks and for GitHub action checks.
     - Replaced `dtolnay/rust-toolchain` action with the runner's preinstalled `rustup`.
     - MSRV now reads `rust-version` from `Cargo.toml`.
