@@ -1,4 +1,4 @@
-name: Weekly Maintenance
+name: Weekly Checks
 
 on:
   schedule:
@@ -14,19 +14,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Get month
-        id: month
-        run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache cargo-audit
-        id: cache-audit
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cargo/bin/cargo-audit
-          key: ${{ runner.os }}-cargo-audit-${{ steps.month.outputs.month }}
-
       - name: Install cargo-audit
-        if: steps.cache-audit.outputs.cache-hit != 'true'
         run: cargo install cargo-audit
 
       - name: Run Audit
@@ -46,7 +34,7 @@ jobs:
         run: rustup default beta
 
       - name: Run Cargo Check
-        run: cargo check --all-targets --release
+        run: cargo check --locked --all-targets --release
 
   codeql-rust:
     name: CodeQL - Rust
