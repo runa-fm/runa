@@ -23,8 +23,9 @@ All the changes made to runa are documented here.
     - Clippy now runs with `--locked`.
     - Removed `Swatinem/rust-cache` action. CI now uses only GitHub's own actions.
     - Tests now run on all targets the CI can execute.
-    - Added `Check lockfile` step to check if the lockfile matches the whole dependency graph.
-    - Renamed `maintenance.yml` workflow to `weekly.yml`.
+    - Added `Check lockfile` job to check if `Cargo.lock` matches the whole dependency graph or if its missing. Build, MSRV, Clippy and Audit wait for it.
+    - Renamed `maintenance.yml` workflow to `weekly.yml`. Rust beta check also now runs with `--locked`.
+    - Removed the monthly `cargo-audit` caching. CI installs it on every run now.
 
 ---
 
