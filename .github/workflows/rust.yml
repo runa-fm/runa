@@ -11,8 +11,19 @@ permissions:
   contents: read
 
 jobs:
+  lockfile:
+    name: Check lockfile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Lockfile is tracked
+        run: git ls-files --error-unmatch Cargo.lock
+      - name: Lockfile matches Cargo.toml
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
   build:
     name: build (${{ matrix.target }})
+    needs: lockfile
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -155,6 +166,7 @@ jobs:
 
   msrv:
     name: Check MSRV
+    needs: lockfile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -164,6 +176,7 @@ jobs:
 
   clippy:
     name: Clippy (${{ matrix.os }})
+    needs: lockfile
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -201,22 +214,11 @@ jobs:
 
   audit:
     name: Audit
+    needs: lockfile
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Get month
-        id: month
-        run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
-
-      - name: Cache cargo-audit
-        id: cache-audit
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cargo/bin/cargo-audit
-          key: ${{ runner.os }}-cargo-audit-${{ steps.month.outputs.month }}
-
       - name: Install cargo-audit
-        if: steps.cache-audit.outputs.cache-hit != 'true'
         run: cargo install cargo-audit
 
       - name: Run Audit
