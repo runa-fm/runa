@@ -25,13 +25,20 @@ jobs:
 
       - name: Install mdBook
         env:
+          MDBOOK_VERSION: "v0.5.2"
+          PACKAGE_NAME: "mdbook-v0.5.2-x86_64-unknown-linux-gnu.tar.gz"
+          MDBOOK_SHA256: "084e4342ba564db270108763e404a7d1f309d932651a22484e93c0dc1a071f6d"
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p bin
-          gh release download v0.5.2 \
+
+          gh release download "$MDBOOK_VERSION" \
             --repo rust-lang/mdBook \
-            --pattern '*x86_64-unknown-linux-gnu.tar.gz' \
-            --output - | tar -xz -C bin
+            --pattern "$PACKAGE_NAME" \
+            -D bin
+
+          echo "$MDBOOK_SHA256  bin/$PACKAGE_NAME" | sha256sum -c
+          tar -xzf "bin/$PACKAGE_NAME" -C bin
           echo "$(pwd)/bin" >> $GITHUB_PATH
 
       - name: Build
