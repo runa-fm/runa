@@ -12,11 +12,12 @@ use std::fs::{self, Metadata};
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::SystemTime;
 
-use chrono::{DateTime, Local};
 use dashmap::DashMap;
 use humansize::{self, DECIMAL};
+use jiff::{SignedDuration, Timestamp, fmt, tz::TimeZone};
 
 #[cfg(windows)]
 const PERMS_WIDTH: usize = 5;
@@ -187,7 +188,7 @@ impl FileMetadataCache {
         meta: &FileMetadata,
         date_format: &str,
         needs: &MetadataNeeds,
-        now: DateTime<Local>,
+        now: Timestamp,
         #[cfg(unix)] ug_cache: &mut unix_meta::UserGroupCache,
     ) -> Self {
         let ctx = TimeFormatCtx::new(date_format, now);
@@ -300,18 +301,20 @@ pub(crate) mod unix_meta {
 /// and precomputed values for determining how to format timestamps based on their age.
 pub(crate) struct TimeFormatCtx<'a> {
     fmt: &'a str,
-    now: DateTime<Local>,
-    six_months: chrono::Duration,
+    now: Timestamp,
+    tz: &'static TimeZone,
+    six_months: SignedDuration,
     has_year: bool,
 }
 
 impl<'a> TimeFormatCtx<'a> {
     #[inline]
-    pub(crate) fn new(fmt: &'a str, now: DateTime<Local>) -> Self {
+    pub(crate) fn new(fmt: &'a str, now: Timestamp) -> Self {
         Self {
             fmt,
             now,
-            six_months: chrono::Duration::try_days(182).unwrap_or_default(),
+            tz: system_tz(),
+            six_months: SignedDuration::from_hours(182 * 24),
             has_year: fmt
                 .as_bytes()
                 .windows(2)
@@ -342,18 +345,20 @@ pub(crate) fn format_file_time(time: Option<SystemTime>, ctx: &TimeFormatCtx) ->
         return "-".to_string();
     };
 
-    let dt: DateTime<Local> = DateTime::from(t);
-    let final_format = if !ctx.has_year && (ctx.now - dt).abs() > ctx.six_months {
+    let Ok(ts) = Timestamp::try_from(t) else {
+        return "-".to_string();
+    };
+
+    let final_format = if !ctx.has_year && ts.duration_until(ctx.now).abs() > ctx.six_months {
         "%b %e  %Y"
     } else {
         ctx.fmt
     };
-
-    let formatted = dt.format(final_format).to_string();
-    if formatted.is_empty() {
-        return dt.format("%Y-%m-%d %H:%M").to_string();
+    let zoned = ts.to_zoned_datetime(ctx.tz.clone());
+    match fmt::strtime::format(final_format, &zoned) {
+        Ok(formatted) if !formatted.is_empty() => formatted,
+        _ => fmt::strtime::format("%Y-%m-%d %H:%M", &zoned).unwrap_or_else(|_| "-".to_string()),
     }
-    formatted
 }
 
 /// Formatts the file attributes like Directory, Symlink, and permissions in a unix-like format
@@ -427,6 +432,11 @@ fn format_file_type(file_type: &FileType) -> &'static str {
     }
 }
 
+fn system_tz() -> &'static TimeZone {
+    static TZ: OnceLock<TimeZone> = OnceLock::new();
+    TZ.get_or_init(TimeZone::system)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -482,7 +492,7 @@ mod tests {
 
     #[test]
     fn file_metada_time_formatting_none() {
-        let now = Local::now();
+        let now = Timestamp::now();
         let fmt = "%Y-%m-%d %H:%M";
         let ctx = TimeFormatCtx::new(fmt, now);
         let info = FileMetadata {

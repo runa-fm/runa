@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use chrono::format::{Item, StrftimeItems};
+use jiff::fmt;
 use ratatui::widgets::BorderType;
 use serde::{Deserialize, Deserializer};
 
@@ -554,21 +554,29 @@ fn validate_strftime_format(fmt: Option<String>, default_fmt: &str, max_len: usi
         return default_fmt.to_string();
     }
 
-    let mut has_date_specifier = false;
+    if !has_format_specifier(&user_str) {
+        return default_fmt.to_string();
+    }
 
-    for item in StrftimeItems::new(&user_str) {
-        match item {
-            Item::Error => return default_fmt.to_string(),
-            Item::Space(_) | Item::Literal(_) => continue,
-            _ => has_date_specifier = true,
+    match fmt::strtime::format(&user_str, &jiff::ZonedDateTime::now()) {
+        Ok(_) => user_str,
+        Err(_) => default_fmt.to_string(),
+    }
+}
+
+fn has_format_specifier(fmt: &str) -> bool {
+    let mut bytes = fmt.bytes();
+    while let Some(b) = bytes.next() {
+        if b == b'%' {
+            match bytes.next() {
+                Some(b'%') => continue,
+                Some(_) => return true,
+                None => return false,
+            }
         }
     }
 
-    if has_date_specifier {
-        user_str
-    } else {
-        default_fmt.to_string()
-    }
+    false
 }
 
 fn deserialize_sort_date_format<'de, D>(deserializer: D) -> Result<String, D::Error>

@@ -10,8 +10,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use chrono::Local;
 use dashmap::DashMap;
+use jiff::Timestamp;
 
 use crate::core::{
     FileEntry,
@@ -324,7 +324,7 @@ impl Listing {
         sort_date_format: &str,
         cache: &MetaCache,
     ) -> Vec<Arc<str>> {
-        let now = Local::now();
+        let now = Timestamp::now();
         let ctx = TimeFormatCtx::new(sort_date_format, now);
 
         let mut keys: Vec<(u8, u128, usize)> = Vec::with_capacity(entries.len());

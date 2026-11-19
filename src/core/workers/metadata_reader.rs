@@ -8,8 +8,8 @@ use std::io;
 use std::sync::Arc;
 use std::thread;
 
-use chrono::Local;
 use crossbeam_channel::{Receiver, Sender};
+use jiff::Timestamp;
 
 use crate::core::{
     metadata::{FileMetadata, FileMetadataCache},
@@ -30,7 +30,7 @@ pub(super) fn start(task_rx: Receiver<MetadataTask>, res_tx: Sender<WorkerRespon
             tab_id,
         }) = task_rx.recv()
         {
-            let now = Local::now();
+            let now = Timestamp::now();
             match FileMetadata::new(&path) {
                 Ok(meta) => {
                     let cache = FileMetadataCache::from(

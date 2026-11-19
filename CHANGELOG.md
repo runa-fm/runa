@@ -11,6 +11,7 @@ All the changes made to runa are documented here.
 
 ### Changed
 - **Windows**: `rn.exe` now links the C runtime statically and no longer needs Visual C++ Redistributable.
+- **Dependencies**: Switched from `chrono` to `jiff`.
 
 ### Internal
 - **Cargo**:
