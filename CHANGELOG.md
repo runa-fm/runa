@@ -2,7 +2,9 @@
 
 All the changes made to runa are documented here.
 
-## [0.15.7] - UNRELEASED
+## [0.15.7] - 2026-11-20
+
+#### File renaming fixes, switch from `chrono` to `jiff`, CI hardening and core refactors.
 
 ### Fixed
 - **File renaming**:
