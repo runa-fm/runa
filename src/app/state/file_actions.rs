@@ -282,6 +282,16 @@ impl AppState {
         if self.actions.input_buffer().is_empty() {
             return;
         }
+
+        if !path::is_valid_entry_name(self.actions.input_buffer()) {
+            self.push_overlay_message(
+                "Rename failed: invalid name.".to_string(),
+                Timings::MESSAGE,
+                None,
+            );
+            return;
+        }
+
         if let Some(entry) = self.nav.selected_entry() {
             let old_path = self.nav.current_dir().join(entry.name());
             let new_path = old_path.with_file_name(self.actions.input_buffer());
@@ -291,7 +301,8 @@ impl AppState {
             }
 
             let is_case_rename = old_path.to_string_lossy().to_lowercase()
-                == new_path.to_string_lossy().to_lowercase();
+                == new_path.to_string_lossy().to_lowercase()
+                && path::is_same_entry(&old_path, &new_path);
 
             if new_path.exists() && !is_case_rename {
                 let name = new_path

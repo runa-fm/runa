@@ -3,7 +3,7 @@
 use std::borrow::Cow;
 use std::fs;
 use std::io;
-use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::path::{self, Component, MAIN_SEPARATOR, Path, PathBuf};
 
 use crate::utils::os;
 
@@ -175,6 +175,47 @@ pub(crate) fn validate_path(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+/// Checks if the string of a entry name is a valid
+/// either as correct string or as a vaild path.
+///
+/// # Returns
+/// True if the entry name is valid and false if its invalid.
+pub(crate) fn is_valid_entry_name(name: &str) -> bool {
+    if name.is_empty() || name.contains('\0') || name.contains(path::is_separator) {
+        return false;
+    }
+
+    let mut components = Path::new(name).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+}
+
+/// Compares two paths to check if they match to an entry
+///
+/// # Returns
+/// True if the two paths share the entry, false if not.
+pub(crate) fn is_same_entry(path_a: &Path, path_b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        match (fs::symlink_metadata(path_a), fs::symlink_metadata(path_b)) {
+            (Ok(ma), Ok(mb)) => ma.dev() == mb.dev() && ma.ino() == mb.ino(),
+            _ => false,
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        match (fs::canonicalize(path_a), fs::canonicalize(path_b)) {
+            (Ok(ca), Ok(cb)) => ca == cb,
+            _ => false,
+        }
+    }
+}
+
+/// Format a path type to a string for display on the UI
+///
+/// # Returns
+/// The path in a cleaned string
 pub(crate) fn format_display_path(path: &Path) -> String {
     let path_str = path.to_string_lossy();
     let cleaned = clean_display_path(&path_str);
@@ -243,5 +284,19 @@ mod tests {
         assert!(result.is_absolute());
 
         Ok(())
+    }
+
+    #[test]
+    fn valid_entry_name() {
+        assert!(is_valid_entry_name("file.txt"));
+        assert!(is_valid_entry_name(".hidden"));
+        assert!(is_valid_entry_name("..hidden"));
+
+        assert!(!is_valid_entry_name(""));
+        assert!(!is_valid_entry_name("."));
+        assert!(!is_valid_entry_name(".."));
+        assert!(!is_valid_entry_name("a/b"));
+        assert!(!is_valid_entry_name("foo/"));
+        assert!(!is_valid_entry_name("a\0n"));
     }
 }

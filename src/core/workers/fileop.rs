@@ -15,6 +15,7 @@ use std::thread;
 use crossbeam_channel::{Receiver, Sender};
 
 use crate::core::workers::{FileOperation, WorkerResponse};
+use crate::utils::path;
 
 struct ActiveOpGuard(Arc<AtomicUsize>);
 
@@ -68,52 +69,76 @@ pub(super) fn start(
                     overwrite,
                 } => {
                     let target = new;
-                    let is_case_rename = old.to_string_lossy().to_lowercase()
-                        == target.to_string_lossy().to_lowercase();
+                    let valid_target = match (old.parent(), target.parent(), target.file_name()) {
+                        (Some(old_path), Some(new_path), Some(_)) => old_path == new_path,
+                        _ => false,
+                    };
 
-                    if target.exists() && !is_case_rename && !overwrite {
+                    if !valid_target {
                         Err(format!(
-                            "Rename failed: '{}' already exists",
-                            target.file_name().unwrap_or_default().to_string_lossy()
+                            "Rename failed: invalid target '{}'",
+                            target.display()
                         ))
                     } else {
-                        if target.exists() && !is_case_rename && overwrite {
-                            if old.is_dir() && target.is_dir() {
-                                match merge_dir(&old, &target, true) {
-                                    Ok(()) => {
-                                        focus_target = target.file_name().map(|n| n.to_os_string());
-                                        Ok(())
+                        let is_case_rename = old.to_string_lossy().to_lowercase()
+                            == target.to_string_lossy().to_lowercase()
+                            && path::is_same_entry(&old, &target);
+
+                        if target.exists() && !is_case_rename && !overwrite {
+                            Err(format!(
+                                "Rename failed: '{}' already exists",
+                                target.file_name().unwrap_or_default().to_string_lossy()
+                            ))
+                        } else {
+                            if target.exists() && !is_case_rename && overwrite {
+                                if old.is_dir() && target.is_dir() {
+                                    match merge_dir(&old, &target, true) {
+                                        Ok(()) => {
+                                            focus_target =
+                                                target.file_name().map(|n| n.to_os_string());
+                                            Ok(())
+                                        }
+                                        Err(e) => Err(format!(
+                                            "Could not merge directories '{}' -> '{}': {}",
+                                            old.display(),
+                                            target.display(),
+                                            e
+                                        )),
                                     }
-                                    Err(e) => Err(format!(
-                                        "Could not merge directories '{}' -> '{}': {}",
-                                        old.display(),
-                                        target.display(),
-                                        e
-                                    )),
+                                } else {
+                                    let remove_res = if target.is_dir() {
+                                        if let (Ok(old_canon), Ok(target_canon)) =
+                                            (fs::canonicalize(&old), fs::canonicalize(&target))
+                                            && old_canon.starts_with(&target_canon)
+                                        {
+                                            Err(io::Error::new(
+                                                io::ErrorKind::InvalidInput,
+                                                "cannot overwrite an parent directory",
+                                            ))
+                                        } else {
+                                            fs::remove_dir_all(&target)
+                                        }
+                                    } else {
+                                        fs::remove_file(&target)
+                                    };
+
+                                    if let Err(e) = remove_res {
+                                        Err(format!(
+                                            "Could not remove existing target before rename: {}: {}",
+                                            target.display(),
+                                            e
+                                        ))
+                                    } else {
+                                        focus_target = target.file_name().map(|n| n.to_os_string());
+                                        rename_with_fallback(&old, &target, old.is_dir())
+                                            .map_err(|e| e.to_string())
+                                    }
                                 }
                             } else {
-                                let remove_res = if target.is_dir() {
-                                    fs::remove_dir_all(&target)
-                                } else {
-                                    fs::remove_file(&target)
-                                };
-
-                                if let Err(e) = remove_res {
-                                    Err(format!(
-                                        "Could not remove existing target before rename: {}: {}",
-                                        target.display(),
-                                        e
-                                    ))
-                                } else {
-                                    focus_target = target.file_name().map(|n| n.to_os_string());
-                                    rename_with_fallback(&old, &target, old.is_dir())
-                                        .map_err(|e| e.to_string())
-                                }
+                                focus_target = target.file_name().map(|n| n.to_os_string());
+                                rename_with_fallback(&old, &target, old.is_dir())
+                                    .map_err(|e| e.to_string())
                             }
-                        } else {
-                            focus_target = target.file_name().map(|n| n.to_os_string());
-                            rename_with_fallback(&old, &target, old.is_dir())
-                                .map_err(|e| e.to_string())
                         }
                     }
                 }
@@ -464,7 +489,7 @@ pub(crate) fn merge_dir(src: &Path, dst: &Path, overwrite: bool) -> io::Result<(
 pub(crate) fn rename_with_fallback(src: &Path, dst: &Path, is_dir: bool) -> io::Result<()> {
     match fs::rename(src, dst) {
         Ok(_) => Ok(()),
-        Err(_) => {
+        Err(e) if e.kind() == io::ErrorKind::CrossesDevices => {
             if is_dir {
                 copy_recursive(src, dst)?;
                 fs::remove_dir_all(src)
@@ -473,6 +498,7 @@ pub(crate) fn rename_with_fallback(src: &Path, dst: &Path, is_dir: bool) -> io::
                 fs::remove_file(src)
             }
         }
+        Err(e) => Err(e),
     }
 }
 
@@ -634,6 +660,70 @@ mod tests {
         assert_eq!(err.kind(), io::ErrorKind::InvalidInput);
         assert!(err.to_string().contains("subdirectory"));
 
+        Ok(())
+    }
+
+    #[test]
+    fn rename_rejects_dot_parent_targets() -> Result<(), Box<dyn error::Error>> {
+        let parent = tempdir()?;
+        let child = parent.path().join("child");
+        fs::create_dir(&child)?;
+
+        let keep = parent.path().join("keep.txt");
+        let file = child.join("file.txt");
+        fs::write(&keep, "keep")?;
+        fs::write(&file, "data")?;
+
+        let workers = Workers::spawn();
+
+        for bad_name in ["..", "."] {
+            workers.fileop_tx().send(FileOperation::Rename {
+                old: file.clone(),
+                new: file.with_file_name(bad_name),
+                overwrite: true,
+            })?;
+
+            let response = workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
+            assert!(
+                matches!(response, WorkerResponse::Error(_)),
+                "Expected error for target '{}', got {:?}",
+                bad_name,
+                response
+            );
+        }
+
+        assert!(keep.exists());
+        assert!(file.exists());
+        Ok(())
+    }
+
+    #[test]
+    fn rename_case_collision_no_overwrite() -> Result<(), Box<dyn error::Error>> {
+        let dir = tempdir()?;
+        let upper = dir.path().join("Foo.txt");
+        let lower = dir.path().join("foo.txt");
+
+        fs::write(&upper, "upper")?;
+        if lower.exists() {
+            return Ok(());
+        }
+        fs::write(&lower, "lower")?;
+
+        let workers = Workers::spawn();
+        workers.fileop_tx().send(FileOperation::Rename {
+            old: upper.clone(),
+            new: lower.clone(),
+            overwrite: false,
+        })?;
+
+        let response = workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
+        assert!(
+            matches!(response, WorkerResponse::Error(_)),
+            "Got {:?}",
+            response
+        );
+        assert_eq!(fs::read_to_string(&upper)?, "upper");
+        assert_eq!(fs::read_to_string(&lower)?, "lower");
         Ok(())
     }
 }
