@@ -244,7 +244,7 @@ pub(crate) enum WorkerResponse {
 }
 
 impl WorkerResponse {
-    pub(crate) fn tab_id(&self) -> Option<usize> {
+    pub(crate) const fn tab_id(&self) -> Option<usize> {
         match self {
             WorkerResponse::DirectoryLoaded { tab_id, .. } => *tab_id,
             WorkerResponse::DirectoryFailed { tab_id, .. } => *tab_id,

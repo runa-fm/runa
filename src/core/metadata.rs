@@ -152,7 +152,7 @@ impl FileMetadata {
         format_file_time(self.accessed, ctx)
     }
 
-    pub(crate) fn file_type(&self) -> &'static str {
+    pub(crate) const fn file_type(&self) -> &'static str {
         format_file_type(&self.file_type)
     }
 
@@ -423,7 +423,7 @@ fn format_attributes(meta: &Metadata) -> String {
 /// Formats the FileType enum into a human-readable string.
 /// # Returns
 /// A static string representing the file type.
-fn format_file_type(file_type: &FileType) -> &'static str {
+const fn format_file_type(file_type: &FileType) -> &'static str {
     match file_type {
         FileType::File => "File",
         FileType::Directory => "Directory",

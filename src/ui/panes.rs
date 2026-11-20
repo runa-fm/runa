@@ -59,12 +59,12 @@ impl PaneStyles {
         }
     }
 
-    pub(super) fn with_entry(mut self, item: Style) -> Self {
+    pub(super) const fn with_entry(mut self, item: Style) -> Self {
         self.item = item;
         self
     }
 
-    pub(super) fn with_selection(mut self, selection: Style) -> Self {
+    pub(super) const fn with_selection(mut self, selection: Style) -> Self {
         self.selection = selection;
         self
     }
@@ -154,7 +154,7 @@ struct RightCol<'a> {
 
 impl<'a> RightCol<'a> {
     #[inline]
-    fn none() -> Self {
+    const fn none() -> Self {
         Self {
             text: None,
             width: 0,
@@ -162,7 +162,7 @@ impl<'a> RightCol<'a> {
     }
 
     #[inline]
-    fn reserve(self) -> usize {
+    const fn reserve(self) -> usize {
         if self.text.is_some() {
             self.width as usize + 1
         } else {
@@ -782,7 +782,7 @@ fn make_tree_row<'a>(row: &'a TreeRow, context: &PaneContext, guide_style: Style
 }
 
 #[inline]
-fn pane_show_col(inner_w: u16, right_w: u16) -> bool {
+const fn pane_show_col(inner_w: u16, right_w: u16) -> bool {
     right_w > 0 && inner_w >= right_w + 1 + MIN_LEFT_WIDTH
 }
 
@@ -813,7 +813,7 @@ fn truncate_owned(s: &str, max_w: usize) -> Cow<'_, str> {
 }
 
 #[inline]
-fn left_remaining(total_w: usize, used_w: usize, reserve: usize) -> usize {
+const fn left_remaining(total_w: usize, used_w: usize, reserve: usize) -> usize {
     total_w.saturating_sub(reserve).saturating_sub(used_w)
 }
 

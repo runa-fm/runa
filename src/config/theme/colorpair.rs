@@ -60,7 +60,7 @@ impl From<Style> for ColorPair {
 }
 
 impl ColorPair {
-    pub(super) fn new(fg: Color, bg: Color) -> Self {
+    pub(super) const fn new(fg: Color, bg: Color) -> Self {
         Self { fg, bg }
     }
 

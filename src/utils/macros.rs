@@ -44,7 +44,7 @@ macro_rules! getters {
     ($( #[$meta:meta] )? $method:ident => $field:ident : $type:ty $(,)?) => {
         $( #[$meta] )?
         #[inline]
-        pub(crate) fn $method(&self) -> $type {
+        pub(crate) const fn $method(&self) -> $type {
             self.$field
         }
     };
@@ -60,7 +60,7 @@ macro_rules! getters {
     ($( #[$meta:meta] )? $field:ident : $type:ty $(,)?) => {
         $( #[$meta] )?
         #[inline]
-        pub(crate) fn $field(&self) -> $type {
+        pub(crate) const fn $field(&self) -> $type {
             self.$field
         }
     };

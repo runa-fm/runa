@@ -44,7 +44,10 @@ pub(super) fn get_dialog_style(
     }
 }
 
-pub(super) fn adjusted_dialog_position(pos: DialogPosition, is_unified: bool) -> DialogPosition {
+pub(super) const fn adjusted_dialog_position(
+    pos: DialogPosition,
+    is_unified: bool,
+) -> DialogPosition {
     match (is_unified, pos) {
         (true, DialogPosition::TopRight) => DialogPosition::Custom(100, 3),
         (true, DialogPosition::TopLeft) => DialogPosition::Custom(0, 3),

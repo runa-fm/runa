@@ -290,7 +290,7 @@ impl SymlinkTheme {
         }
     }
 
-    pub(crate) fn from_palette(dir: Color, file: Color) -> Self {
+    pub(crate) const fn from_palette(dir: Color, file: Color) -> Self {
         Self {
             directory: dir,
             file,
@@ -468,7 +468,7 @@ impl ArchiveTheme {
         }
     }
 
-    pub(crate) fn modifier(&self) -> Modifier {
+    pub(crate) const fn modifier(&self) -> Modifier {
         match self.modifier {
             ArchiveModifier::None => Modifier::empty(),
             ArchiveModifier::Dim => Modifier::DIM,

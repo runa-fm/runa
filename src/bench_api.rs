@@ -46,11 +46,11 @@ pub type Names = Vec<(OsString, u8)>;
 struct Lcg(u64);
 
 impl Lcg {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self(0x2545_F491_4F6C_DD1D)
     }
 
-    fn next(&mut self) -> usize {
+    const fn next(&mut self) -> usize {
         self.0 = self
             .0
             .wrapping_mul(6_364_136_223_846_793_005)
@@ -110,7 +110,7 @@ fn synthetic_metadata(entries: &[FileEntry]) -> DashMap<PathBuf, CachedMetaKey> 
     cache
 }
 
-fn list_options() -> DirListOptions {
+const fn list_options() -> DirListOptions {
     DirListOptions {
         dirs_first: true,
         show_hidden: true,
@@ -140,7 +140,7 @@ pub enum SortBy {
 }
 
 impl SortBy {
-    fn mode(self) -> SortMode {
+    const fn mode(self) -> SortMode {
         match self {
             SortBy::Name => SortMode::Name,
             SortBy::Natural => SortMode::Natural,
@@ -400,6 +400,6 @@ impl IdleFixture {
 
 /// Returns the size of a file entry in bytes and its heap allocations,
 /// without and with a symlink.
-pub fn entry_layout() -> (usize, usize, usize) {
+pub const fn entry_layout() -> (usize, usize, usize) {
     (std::mem::size_of::<FileEntry>(), 1, 2)
 }

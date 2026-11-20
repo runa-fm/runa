@@ -60,7 +60,7 @@ pub(crate) enum SortOrder {
 }
 
 impl SortOrder {
-    pub(crate) fn toggle(self) -> Self {
+    pub(crate) const fn toggle(self) -> Self {
         match self {
             SortOrder::Ascending => SortOrder::Descending,
             SortOrder::Descending => SortOrder::Ascending,
@@ -150,7 +150,7 @@ impl Listing {
 
     /// Determines the file entry priority for the sorting process based on listing options.
     #[inline]
-    fn prio_for_entry(&self, entry: &FileEntry) -> u8 {
+    const fn prio_for_entry(&self, entry: &FileEntry) -> u8 {
         if self.list.dirs_first && (entry.flags() & FileEntry::IS_DIR) != 0 {
             Self::PRIO_DIR
         } else {

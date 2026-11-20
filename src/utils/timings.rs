@@ -54,7 +54,7 @@ pub(crate) struct Throttler {
 }
 
 impl Throttler {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             last_timing: None,
             queued: false,

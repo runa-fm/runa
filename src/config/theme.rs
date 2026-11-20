@@ -199,7 +199,7 @@ impl Theme {
         self.archive.guide_style(self.accent_style())
     }
 
-    pub(crate) fn archive_modifier(&self) -> Modifier {
+    pub(crate) const fn archive_modifier(&self) -> Modifier {
         self.archive.modifier()
     }
 
@@ -488,7 +488,7 @@ where
     Ok(processed_map)
 }
 
-fn rgb(c: (u8, u8, u8)) -> Color {
+const fn rgb(c: (u8, u8, u8)) -> Color {
     Color::Rgb(c.0, c.1, c.2)
 }
 

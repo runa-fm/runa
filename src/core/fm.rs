@@ -140,22 +140,22 @@ impl FileEntry {
     }
 
     #[inline]
-    pub(crate) fn is_dir(&self) -> bool {
+    pub(crate) const fn is_dir(&self) -> bool {
         self.flags & Self::IS_DIR != 0
     }
 
     #[inline]
-    pub(crate) fn is_symlink(&self) -> bool {
+    pub(crate) const fn is_symlink(&self) -> bool {
         self.flags & Self::IS_SYMLINK != 0
     }
 
     #[inline]
-    pub(crate) fn is_broken_sym(&self) -> bool {
+    pub(crate) const fn is_broken_sym(&self) -> bool {
         self.flags & Self::IS_BROKEN_SYM != 0
     }
 
     #[inline]
-    pub(crate) fn is_executable(&self) -> bool {
+    pub(crate) const fn is_executable(&self) -> bool {
         self.flags & Self::IS_EXECUTABLE != 0
     }
 

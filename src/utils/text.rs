@@ -26,7 +26,7 @@ impl StrBuffer {
         Self { data, offset }
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) const fn len(&self) -> usize {
         self.offset.len()
     }
 

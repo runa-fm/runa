@@ -122,7 +122,7 @@ struct InternalStartup {
 }
 
 /// Helper function for default max_find_results
-fn default_find_results() -> usize {
+const fn default_find_results() -> usize {
     DEFAULT_FIND_RESULTS
 }
 

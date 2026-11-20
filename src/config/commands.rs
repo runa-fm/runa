@@ -42,7 +42,7 @@ pub(crate) enum RunMode {
 
 impl RunMode {
     /// Returns the run mode of a configured command.
-    pub(crate) fn from_terminal(terminal: bool) -> Self {
+    pub(crate) const fn from_terminal(terminal: bool) -> Self {
         if terminal {
             RunMode::Terminal
         } else {

@@ -259,7 +259,7 @@ enum PrefixState {
 }
 
 impl KeyPrefix {
-    pub(crate) fn new(timeout: Duration) -> Self {
+    pub(crate) const fn new(timeout: Duration) -> Self {
         Self {
             state: PrefixState::None,
             last_time: None,

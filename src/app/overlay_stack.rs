@@ -32,7 +32,7 @@ pub(crate) struct OverlayStack {
 }
 
 impl Overlay {
-    pub(crate) fn kind(&self) -> OverlayKind {
+    pub(crate) const fn kind(&self) -> OverlayKind {
         match self {
             Overlay::ShowInfo { .. } => OverlayKind::ShowInfo,
             Overlay::Message { .. } => OverlayKind::Message,
@@ -43,7 +43,7 @@ impl Overlay {
 }
 
 impl OverlayStack {
-    pub(crate) fn new() -> Self {
+    pub(crate) const fn new() -> Self {
         Self {
             overlays: Vec::new(),
         }

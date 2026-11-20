@@ -85,42 +85,42 @@ impl Display {
     }
 
     #[inline]
-    pub(crate) fn is_unified(&self) -> bool {
+    pub(crate) const fn is_unified(&self) -> bool {
         matches!(self.borders, BorderStyle::Unified)
     }
 
     #[inline]
-    pub(crate) fn is_split(&self) -> bool {
+    pub(crate) const fn is_split(&self) -> bool {
         matches!(self.borders, BorderStyle::Split)
     }
 
     #[inline]
-    pub(crate) fn is_no_borders(&self) -> bool {
+    pub(crate) const fn is_no_borders(&self) -> bool {
         matches!(self.borders, BorderStyle::None)
     }
 
     #[inline]
-    pub(crate) fn border_type(&self) -> BorderType {
+    pub(crate) const fn border_type(&self) -> BorderType {
         self.border_shape.as_border_type()
     }
 
     #[inline]
-    pub(crate) fn parent_ratio(&self) -> u16 {
+    pub(crate) const fn parent_ratio(&self) -> u16 {
         self.layout.parent_ratio()
     }
 
     #[inline]
-    pub(crate) fn main_ratio(&self) -> u16 {
+    pub(crate) const fn main_ratio(&self) -> u16 {
         self.layout.main_ratio()
     }
 
     #[inline]
-    pub(crate) fn preview_ratio(&self) -> u16 {
+    pub(crate) const fn preview_ratio(&self) -> u16 {
         self.layout.preview_ratio()
     }
 
     /// Get padding string based on entry_padding
-    pub(crate) fn padding_str(&self) -> &'static str {
+    pub(crate) const fn padding_str(&self) -> &'static str {
         // ASCII whitespaces
         match self.entry_padding {
             0 => "",
@@ -404,22 +404,22 @@ impl PreviewOptions {
         }
     }
 
-    fn default_method() -> PreviewMethod {
+    const fn default_method() -> PreviewMethod {
         PreviewMethod::Internal
     }
 
     #[inline]
-    fn default_wrap() -> bool {
+    const fn default_wrap() -> bool {
         false
     }
 
     #[inline]
-    fn default_tab_width() -> usize {
+    const fn default_tab_width() -> usize {
         4
     }
 
     #[inline]
-    pub(crate) fn method(&self) -> &PreviewMethod {
+    pub(crate) const fn method(&self) -> &PreviewMethod {
         &self.method
     }
 
@@ -492,7 +492,7 @@ enum BorderShape {
 
 /// Public methods for accessing border shape options
 impl BorderShape {
-    fn as_border_type(&self) -> BorderType {
+    const fn as_border_type(&self) -> BorderType {
         match self {
             BorderShape::Square => BorderType::Plain,
             BorderShape::Rounded => BorderType::Rounded,
