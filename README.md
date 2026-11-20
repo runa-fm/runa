@@ -50,7 +50,7 @@ It allows you to navigate directories, view file listings, and perform typical f
 - **Essential-only Rust crates:** No external TUI frameworks or bloat.
 - **Direct terminal rendering:** Uses [ratatui](https://ratatui.rs/) & [crossterm](https://github.com/crossterm-rs/crossterm).
 - **Optional blazing-fast find:** Integrates with [fd](https://github.com/sharkdp/fd) for recursive fuzzy search.
-- **Blazingly lightweight:** The `rn` binary is compact (typically 1.9-2.2 MB, depending on operating system and architecture).
+- **Blazingly lightweight:** The `rn` binary is compact (typically ~2.5-3 MB, depending on operating system and architecture).
 - **Minimal memory footprint**: Optimized for low RAM usage.
 
 </details>
@@ -241,10 +241,10 @@ This will generate a config in the default config path.
 ## Support & Contribute
 If you enjoy using **runa**, you can help the project grow:
 
-* ⭐ **Star the Repo:** It helps more people discover runa :)
-* 🐛 **Report Bugs:** Open an issue if something doesn't work as expected.
-* 💡 **Feature Requests:** Suggest new ideas in the [Discussions](https://github.com/runa-fm/runa/discussions) tab.
-* 🦀 **Contribute:** Pull requests are always welcome! Check out the [CONTRIBUTING guide](CONTRIBUTING.md) for more info.
+* **Star the Repo:** It helps more people discover runa :)
+* **Report Bugs:** Open an issue if something doesn't work as expected.
+* **Feature Requests:** Suggest new ideas in the [Discussions](https://github.com/runa-fm/runa/discussions) tab.
+* **Contribute:** Pull requests are always welcome! Check out the [CONTRIBUTING guide](CONTRIBUTING.md) for more info.
 
 
 ## Special Thanks
