@@ -1,7 +1,7 @@
 [package]
 name = "runa-fm"
 description = "A fast, keyboard-focused terminal file manager (TUI). Highly configurable and lightweight."
-version = "0.15.8-alhpa.1"
+version = "0.15.8-alpha.2"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -40,7 +40,6 @@ harness = false
 bench = false
 
 [dependencies]
-ansi-to-tui = { version = "8.0.1", default-features = false, features = ["simd"] }
 crossbeam-channel = "0.5.17"
 dashmap = { version = "6.2.1", default-features = false }
 fuzzy-matcher = "0.3.7"

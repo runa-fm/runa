@@ -2,6 +2,15 @@
 
 All the changes made to runa are documented here.
 
+## [0.15.8] - UNRELEASED
+
+### Internal
+- **ANSI preview parser**: Replaced `ansi-to-tui` crate with an internal parser in `app/ansi.rs`. Avoids extra allocation and handles `Color::Reset` cleanup in previews better.
+
+
+---
+
+
 ## [0.15.7] - 2026-11-20
 
 #### File renaming fixes, switch from `chrono` to `jiff`, CI hardening and core refactors.

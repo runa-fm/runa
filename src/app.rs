@@ -1,6 +1,7 @@
 //! Application module.
 
 pub(crate) mod actions;
+mod ansi;
 mod clipboard;
 mod container;
 mod file_info;
