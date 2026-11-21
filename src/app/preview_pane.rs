@@ -269,18 +269,6 @@ impl PreviewState {
             PreviewData::Directory { .. } | PreviewData::Empty => {}
         }
     }
-
-    // fn clear_reset_colors(text: &mut Text<'_>) {
-    //     for span in text.lines.iter_mut().flat_map(|line| line.spans.iter_mut()) {
-    //         if span.style.fg == Some(Color::Reset) {
-    //             span.style.fg = None;
-    //         }
-    //
-    //         if span.style.bg == Some(Color::Reset) {
-    //             span.style.bg = None;
-    //         }
-    //     }
-    // }
 }
 
 impl Default for PreviewState {
