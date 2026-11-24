@@ -10,12 +10,11 @@ use std::time::{Duration, Instant};
 use ratatui::text::Text;
 
 use crate::app::actions::ScrollState;
-use crate::app::ansi;
 use crate::core::{
     FileEntry,
     preview::{PreviewLines, TreeRow},
 };
-use crate::utils::{text::StrBuffer, timings::Timings};
+use crate::utils::{ansi, text::StrBuffer, timings::Timings};
 
 /// Pages loaded above and below the visible part of a file preview.
 const PRELOAD_PAGES: usize = 1;

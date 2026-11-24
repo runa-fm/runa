@@ -5,7 +5,9 @@
 //! - [text]: the [StrBuffer](text::StrBuffer) string type.
 //! - [os]: OS-specific helpers.
 //! - [timings]: named duration constants and the throttler.
+//! - [ansi]: ansi escape parser for previews.
 
+pub(crate) mod ansi;
 pub(crate) mod os;
 pub(crate) mod path;
 pub(crate) mod text;
