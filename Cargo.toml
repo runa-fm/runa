@@ -74,8 +74,7 @@ uzers = { version = "0.12.2", default-features = false }
 
 [dev-dependencies]
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
-filetime = "0.2.29"
-rand = "0.10.3"
+rand = "0.10.4"
 stats_alloc = "0.1.10"
 tempfile = "3.27.0"
 

@@ -545,9 +545,15 @@ mod tests {
 
     use super::*;
     use crate::core::fm;
-    use std::fs::File;
+    use std::fs::{File, FileTimes};
     use std::io::Write;
+    use std::time::{Duration, UNIX_EPOCH};
     use tempfile::tempdir;
+
+    fn set_mtime(path: &Path, unix_secs: u64) -> std::io::Result<()> {
+        let mtime = UNIX_EPOCH + Duration::from_secs(unix_secs);
+        std::fs::set_times(path, FileTimes::new().set_modified(mtime))
+    }
 
     #[test]
     fn listing_filters_entries_by_flags() {
@@ -785,11 +791,11 @@ mod tests {
         let meta_cache = DashMap::new();
 
         File::create(&path1)?.write_all(b"old")?;
-        filetime::set_file_mtime(&path1, filetime::FileTime::from_unix_time(1000, 0))?;
+        set_mtime(&path1, 1000)?;
         File::create(&path2)?.write_all(b"newer")?;
-        filetime::set_file_mtime(&path2, filetime::FileTime::from_unix_time(2000, 0))?;
+        set_mtime(&path2, 2000)?;
         File::create(&path3)?.write_all(b"newest")?;
-        filetime::set_file_mtime(&path3, filetime::FileTime::from_unix_time(3000, 0))?;
+        set_mtime(&path3, 3000)?;
 
         let mut entries = fm::browse_dir(temp_dir.path())?;
         let fmt = Listing::new(
@@ -818,10 +824,10 @@ mod tests {
         let meta_cache = DashMap::new();
 
         std::fs::create_dir(&dir_path)?;
-        filetime::set_file_mtime(&dir_path, filetime::FileTime::from_unix_time(1000, 0))?;
+        set_mtime(&dir_path, 1000)?;
 
         File::create(&file_path)?.write_all(b"new")?;
-        filetime::set_file_mtime(&file_path, filetime::FileTime::from_unix_time(5000, 0))?;
+        set_mtime(&file_path, 5000)?;
 
         let mut entries = fm::browse_dir(temp_dir.path())?;
 
