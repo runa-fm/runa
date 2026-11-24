@@ -50,6 +50,7 @@ pub(crate) struct PreviewTask {
     pub(crate) path: PathBuf,
     pub(crate) max_lines: usize,
     pub(crate) pane_width: usize,
+    pub(crate) tab_width: usize,
     pub(crate) scroll: usize,
     pub(crate) preview_mode: PreviewMode,
     pub(crate) request_id: u64,

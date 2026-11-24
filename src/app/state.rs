@@ -795,6 +795,7 @@ impl AppState {
                 }
             } else {
                 let preview_options = self.config.display().preview_options();
+                let tab_width = preview_options.tab_width();
                 let preview_method = preview_options.method();
                 let preview_mode = if let Some(archive) = preview_options.archive_cmd(&path)
                     && let Some(program) = archive.args().first()
@@ -827,6 +828,7 @@ impl AppState {
                         path,
                         max_lines,
                         pane_width: self.metrics.preview_width,
+                        tab_width,
                         scroll,
                         preview_mode,
                         request_id,

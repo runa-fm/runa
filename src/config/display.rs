@@ -14,16 +14,24 @@ use crate::config::commands;
 use crate::config::dialog_layout::DialogPosition;
 use crate::config::keys::InputKeyLists;
 
+const DEFAULT_TAB_WIDTH: usize = 4;
+const MAX_TAB_WIDTH: usize = 16;
+
 /// Default date format of the sort column.
 const SORT_DATE_FORMAT: &str = "%b %e %H:%M";
+
 /// Default date format of the info dialog and status line.
 const INFO_DATE_FORMAT: &str = "%Y-%m-%d %H:%M";
+
 /// Default format of the status line.
 const STATUS_FORMAT: &str = "{perms} | {size}";
+
 /// Longest accepted sort date format, it has to fit in the sort column.
 const MAX_SORT_DATE_FORMAT_LEN: usize = 32;
+
 /// Longest accepted info date format.
 const MAX_INFO_DATE_FORMAT_LEN: usize = 64;
+
 /// Info widget dialog position default variable.
 const DEFAULT_INFO_POSITION: DialogPosition = DialogPosition::BottomLeft;
 
@@ -372,7 +380,10 @@ pub(crate) struct PreviewOptions {
     theme: Option<String>,
     #[serde(default = "PreviewOptions::default_wrap")]
     wrap: bool,
-    #[serde(default = "PreviewOptions::default_tab_width")]
+    #[serde(
+        default = "PreviewOptions::default_tab_width",
+        deserialize_with = "deserialize_tab_width"
+    )]
     tab_width: usize,
     #[serde(default)]
     archive: HashMap<String, InputKeyLists>,
@@ -399,11 +410,26 @@ impl PreviewOptions {
             style: BatStyle::Plain,
             theme: None,
             wrap: false,
-            tab_width: 4,
+            tab_width: DEFAULT_TAB_WIDTH,
             archive: HashMap::new(),
         }
     }
 
+    crate::getters! {
+        tab_width: usize,
+    }
+
+    #[inline]
+    pub(crate) const fn default_tab_width() -> usize {
+        DEFAULT_TAB_WIDTH
+    }
+
+    #[inline]
+    pub(crate) const fn method(&self) -> &PreviewMethod {
+        &self.method
+    }
+
+    #[inline]
     const fn default_method() -> PreviewMethod {
         PreviewMethod::Internal
     }
@@ -411,16 +437,6 @@ impl PreviewOptions {
     #[inline]
     const fn default_wrap() -> bool {
         false
-    }
-
-    #[inline]
-    const fn default_tab_width() -> usize {
-        4
-    }
-
-    #[inline]
-    pub(crate) const fn method(&self) -> &PreviewMethod {
-        &self.method
     }
 
     pub(crate) fn archive_cmd(&self, path: &Path) -> Option<ArchivePreview<'_>> {
@@ -577,6 +593,16 @@ fn has_format_specifier(fmt: &str) -> bool {
     }
 
     false
+}
+
+fn deserialize_tab_width<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match usize::deserialize(deserializer)? {
+        0 => Ok(DEFAULT_TAB_WIDTH),
+        width => Ok(width.min(MAX_TAB_WIDTH)),
+    }
 }
 
 fn deserialize_sort_date_format<'de, D>(deserializer: D) -> Result<String, D::Error>

@@ -15,14 +15,21 @@ pub(super) fn start(task_rx: Receiver<PreviewTask>, res_tx: Sender<WorkerRespons
             path,
             max_lines,
             pane_width,
+            tab_width,
             scroll,
             preview_mode,
             request_id,
             tab_id,
         }) = task_rx.recv()
         {
-            let (lines, is_eof) =
-                preview::load(&path, &preview_mode, max_lines, pane_width, scroll);
+            let (lines, is_eof) = preview::load(
+                &path,
+                &preview_mode,
+                max_lines,
+                pane_width,
+                tab_width,
+                scroll,
+            );
             let _ = res_tx.send(WorkerResponse::PreviewLoaded {
                 path,
                 lines,
@@ -54,6 +61,7 @@ mod tests {
             path: preview_file.clone(),
             max_lines: 2,
             pane_width: 40,
+            tab_width: 4,
             scroll: 0,
             preview_mode: PreviewMode::Internal,
             request_id: 3,
@@ -91,6 +99,7 @@ mod tests {
             path: file_path,
             max_lines: 5,
             pane_width: 40,
+            tab_width: 4,
             scroll: 0,
             preview_mode: PreviewMode::Bat { args: vec![] },
             request_id: 99,

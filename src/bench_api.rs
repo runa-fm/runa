@@ -19,7 +19,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use dashmap::DashMap;
 
 use crate::app::AppState;
-use crate::config::Config;
+use crate::config::{Config, display::PreviewOptions};
 use crate::core::cache::DirCache;
 use crate::core::listing::{DirListOptions, SortConfig, SortMode, SortOrder};
 use crate::core::metadata::CachedMetaKey;
@@ -358,7 +358,13 @@ impl PreviewFixture {
     }
 
     pub fn run(&self) -> Vec<String> {
-        preview::safe_read_preview(&self.path, self.lines, self.width, self.scroll)
+        preview::safe_read_preview(
+            &self.path,
+            self.lines,
+            self.width,
+            PreviewOptions::default_tab_width(),
+            self.scroll,
+        )
     }
 }
 

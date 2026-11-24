@@ -83,6 +83,7 @@ pub(crate) fn load(
     mode: &PreviewMode,
     max_lines: usize,
     pane_width: usize,
+    tab_width: usize,
     scroll: usize,
 ) -> (PreviewLines, bool) {
     let read_lines = max_lines + 1;
@@ -91,6 +92,7 @@ pub(crate) fn load(
         PreviewLines::Text(vec![sanitize_to_exact_width(
             "[Temporary file - preview skipped]",
             pane_width,
+            tab_width,
         )])
     } else if let PreviewMode::Archive { program, args, dir } = &mode
         && let Some(rows) = archive_rows(path, program, args, dir.as_deref(), scroll, read_lines)
@@ -99,18 +101,20 @@ pub(crate) fn load(
     } else {
         PreviewLines::Text(match mode {
             PreviewMode::Internal | PreviewMode::Archive { .. } => {
-                safe_read_preview(path, read_lines, pane_width, scroll)
+                safe_read_preview(path, read_lines, pane_width, tab_width, scroll)
             }
             PreviewMode::Bat { args } => {
                 if !os::is_regular_file(path) || is_preview_deny(path) {
-                    safe_read_preview(path, read_lines, pane_width, scroll)
+                    safe_read_preview(path, read_lines, pane_width, tab_width, scroll)
                 } else {
                     match proc::preview_bat(path, read_lines, args.as_slice(), scroll) {
                         // Bat preview succeeded
                         // If bat fails, fallback to internal preview
                         // If bat is not installed or returns error, we fallback to internal preview
                         Ok(lines) => lines,
-                        Err(_) => safe_read_preview(path, read_lines, pane_width, scroll),
+                        Err(_) => {
+                            safe_read_preview(path, read_lines, pane_width, tab_width, scroll)
+                        }
                     }
                 }
             }
@@ -131,13 +135,14 @@ pub(crate) fn load(
 ///
 /// # Returns
 /// A sanitized string that fits exactly within the specified pane width.
-fn sanitize_to_exact_width(line: &str, pane_width: usize) -> String {
+fn sanitize_to_exact_width(line: &str, pane_width: usize, tab_width: usize) -> String {
+    let tab_width = tab_width.max(1);
     let mut out = String::with_capacity(pane_width);
     let mut current_w = 0;
 
     for ch in line.chars() {
         if ch == '\t' {
-            let space_count = 4 - (current_w % 4);
+            let space_count = tab_width - (current_w % tab_width);
             if current_w + space_count > pane_width {
                 break;
             }
@@ -180,12 +185,17 @@ pub(crate) fn safe_read_preview(
     path: &Path,
     max_lines: usize,
     pane_width: usize,
+    tab_width: usize,
     scroll: usize,
 ) -> Vec<String> {
     let max_lines = std::cmp::max(max_lines, MIN_PREVIEW_LINES);
 
     if !os::is_regular_file(path) {
-        return vec![sanitize_to_exact_width(NOT_REGULAR_FILE_MSG, pane_width)];
+        return vec![sanitize_to_exact_width(
+            NOT_REGULAR_FILE_MSG,
+            pane_width,
+            tab_width,
+        )];
     }
 
     // File Read and binary Check
@@ -193,13 +203,18 @@ pub(crate) fn safe_read_preview(
         Ok(mut file) => {
             if let Ok(metadata) = file.metadata() {
                 if !metadata.is_file() {
-                    return vec![sanitize_to_exact_width(NOT_REGULAR_FILE_MSG, pane_width)];
+                    return vec![sanitize_to_exact_width(
+                        NOT_REGULAR_FILE_MSG,
+                        pane_width,
+                        tab_width,
+                    )];
                 }
 
                 if metadata.len() > MAX_PREVIEW_SIZE {
                     return vec![sanitize_to_exact_width(
                         "[File too large for preview]",
                         pane_width,
+                        tab_width,
                     )];
                 }
             }
@@ -212,11 +227,19 @@ pub(crate) fn safe_read_preview(
             let header = &buffer[..header_len];
 
             if header.len() >= 5 && &header[..5] == b"%PDF-" {
-                return vec![sanitize_to_exact_width(BINARY_FILE_PREVIEW_MSG, pane_width)];
+                return vec![sanitize_to_exact_width(
+                    BINARY_FILE_PREVIEW_MSG,
+                    pane_width,
+                    tab_width,
+                )];
             }
 
             if buffer[..n].contains(&0) {
-                return vec![sanitize_to_exact_width(BINARY_FILE_PREVIEW_MSG, pane_width)];
+                return vec![sanitize_to_exact_width(
+                    BINARY_FILE_PREVIEW_MSG,
+                    pane_width,
+                    tab_width,
+                )];
             }
 
             // Rewind to start for full read
@@ -248,7 +271,8 @@ pub(crate) fn safe_read_preview(
                             }
 
                             let line = String::from_utf8_lossy(&current_line);
-                            preview_lines.push(sanitize_to_exact_width(&line, pane_width));
+                            preview_lines
+                                .push(sanitize_to_exact_width(&line, pane_width, tab_width));
                             collected += 1;
 
                             if collected >= max_lines {
@@ -271,7 +295,7 @@ pub(crate) fn safe_read_preview(
                     current_line.pop();
                 }
                 let line = String::from_utf8_lossy(&current_line);
-                preview_lines.push(sanitize_to_exact_width(&line, pane_width));
+                preview_lines.push(sanitize_to_exact_width(&line, pane_width, tab_width));
             }
 
             if preview_lines.is_empty() {
@@ -280,7 +304,7 @@ pub(crate) fn safe_read_preview(
                 } else {
                     "[End of file]"
                 };
-                preview_lines.push(sanitize_to_exact_width(msg, pane_width));
+                preview_lines.push(sanitize_to_exact_width(msg, pane_width, tab_width));
             }
 
             preview_lines
@@ -293,10 +317,11 @@ pub(crate) fn safe_read_preview(
                     return vec![sanitize_to_exact_width(
                         &format!("[Error reading file: {}]", e),
                         pane_width,
+                        tab_width,
                     )];
                 }
             };
-            vec![sanitize_to_exact_width(msg, pane_width)]
+            vec![sanitize_to_exact_width(msg, pane_width, tab_width)]
         }
     }
 }
@@ -455,7 +480,7 @@ mod tests {
         ];
 
         for (input, expected_width) in cases {
-            let result = sanitize_to_exact_width(input, pane_width);
+            let result = sanitize_to_exact_width(input, pane_width, 4);
 
             let actual_width = unicode_width::UnicodeWidthStr::width(result.as_str());
 
