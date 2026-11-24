@@ -4,10 +4,18 @@ All the changes made to runa are documented here.
 
 ## [0.15.8] - UNRELEASED
 
+### Changed
+- **Error Messages**: Removed duplicated `Permission denied:` prefix from directory navigations.
+
+### Fixed
+- **Tab width**: Internal preview method now correctly renders the configured tab width to the preview pane. Preview method `bat` was not affected by this bug.
+
 ### Internal
 - **ANSI preview parser**: Replaced `ansi-to-tui` crate with an internal parser in `utils/ansi.rs`. Avoids extra allocation and handles `Color::Reset` cleanup in previews better.
-- **Dev dependencies**: Removed `filetime` dev dependency in favour of `std::time::fs`.
-- **Refactor**: Split timing constants into `throttle`, `delay` and `message` submodules.
+- **Dev dependencies**: Removed `filetime` dev dependency in favour of `std::fs::set_times`.
+- **Refactor**:
+    - Split timing constants into `throttle`, `delay` and `message` submodules.
+    - Split `push_overlay_message` and `push_overlay_message_aligned` for cleaner callers who don't pass `None` for default alignment.
 
 
 ---
