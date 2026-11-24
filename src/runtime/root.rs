@@ -23,7 +23,7 @@ use crate::app::{AppContainer, Clipboard, KeypressResult};
 use crate::config::Config;
 use crate::core::workers::{WorkerResponse, Workers};
 use crate::ui;
-use crate::utils::timings::{Throttler, Timings};
+use crate::utils::timings::{self, Throttler};
 
 /// The main struct of runa
 /// Contains the AppContainer, the shared clipboard and the worker pool
@@ -99,7 +99,10 @@ impl RunaRoot {
     }
 
     pub(crate) fn reload_ui(&mut self, writer: &mut impl io::Write) -> io::Result<bool> {
-        if !self.ui_reload_throttler.can_trigger(Timings::UI_RELOAD_MS) {
+        if !self
+            .ui_reload_throttler
+            .can_trigger(timings::throttle::UI_RELOAD)
+        {
             return Ok(false);
         }
 
@@ -107,11 +110,11 @@ impl RunaRoot {
         execute!(writer, LeaveAlternateScreen, EnterAlternateScreen, Hide,)?;
         match &mut self.container {
             AppContainer::Single(app) => {
-                app.push_overlay_message("UI reloaded!".into(), Timings::MESSAGE_SHORT, None);
+                app.push_overlay_message("UI reloaded!".into(), timings::message::SHORT, None);
             }
             AppContainer::Tabs(tabs) => {
                 for tab in tabs.iter_mut() {
-                    tab.push_overlay_message("UI reloaded!".into(), Timings::MESSAGE_SHORT, None);
+                    tab.push_overlay_message("UI reloaded!".into(), timings::message::SHORT, None);
                 }
             }
         }
@@ -159,7 +162,7 @@ impl RunaRoot {
     fn reload_config(&mut self) {
         if !self
             .config_reload_throttler
-            .can_trigger(Timings::CONFIG_RELOAD_MS)
+            .can_trigger(timings::throttle::CONFIG_RELOAD)
         {
             return;
         }
@@ -174,7 +177,7 @@ impl RunaRoot {
                         app.apply_new_config(Arc::clone(&new_config));
                         app.push_overlay_message(
                             "Configuration reloaded!".into(),
-                            Timings::MESSAGE_SHORT,
+                            timings::message::SHORT,
                             None,
                         );
                     }
@@ -185,7 +188,7 @@ impl RunaRoot {
                         tabs.sync_tab_line();
                         tabs.current_tab_mut().push_overlay_message(
                             "Configuration reloaded!".into(),
-                            Timings::MESSAGE_SHORT,
+                            timings::message::SHORT,
                             None,
                         );
                     }
@@ -195,7 +198,7 @@ impl RunaRoot {
                 self.config_reload_throttler.touch();
                 self.container
                     .current_mut()
-                    .push_overlay_message(e, Timings::MESSAGE_LONG, None);
+                    .push_overlay_message(e, timings::message::LONG, None);
             }
         }
     }

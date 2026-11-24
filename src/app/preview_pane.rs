@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use ratatui::text::Text;
 
@@ -14,7 +14,7 @@ use crate::core::{
     FileEntry,
     preview::{PreviewLines, TreeRow},
 };
-use crate::utils::{ansi, text::StrBuffer, timings::Timings};
+use crate::utils::{ansi, text::StrBuffer, timings};
 
 /// Pages loaded above and below the visible part of a file preview.
 const PRELOAD_PAGES: usize = 1;
@@ -88,8 +88,7 @@ impl PreviewState {
 
     // Debounce timing for preview render
     pub(crate) fn should_trigger(&self) -> bool {
-        self.pending
-            && self.last_input_time.elapsed() > Duration::from_millis(Timings::PREVIEW_DEBOUNCE_MS)
+        self.pending && self.last_input_time.elapsed() > timings::delay::PREVIEW_DEBOUNCE
     }
 
     /// Prepares a new preview request for the given path

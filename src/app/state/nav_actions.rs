@@ -22,7 +22,7 @@ use crate::app::{
     state::{AppState, KeypressResult},
 };
 use crate::core::workers::Workers;
-use crate::utils::{os, path, timings::Timings};
+use crate::utils::{os, path, timings};
 
 impl AppState {
     /// Handles navigation actions (up, down, into dir, etc).
@@ -115,7 +115,7 @@ impl AppState {
             return;
         }
 
-        let allow_immediate = self.nav_time.can_trigger(Timings::NAV_THROTTLE_MS);
+        let allow_immediate = self.nav_time.can_trigger(timings::throttle::NAV);
 
         let selected_changed_preview = if let Some(entry) = self.nav.selected_entry() {
             let sel_path = self.nav.current_dir().join(entry.name());

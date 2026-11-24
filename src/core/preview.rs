@@ -8,13 +8,11 @@ use std::ffi::{OsStr, OsString};
 use std::fs::File;
 use std::io::{BufReader, ErrorKind, Read, Seek};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use unicode_width::UnicodeWidthChar;
 
 use crate::core::proc;
-use crate::utils::Timings;
-use crate::utils::os;
+use crate::utils::{os, timings};
 
 const DENY: &[&str] = &["a", "lib", "ilk", "h5", "zip", "gz", "tar", "pdb"];
 
@@ -343,7 +341,7 @@ fn archive_rows(
         return None;
     }
 
-    let timeout = Duration::from_millis(Timings::PREVIEW_COMMAND_TIMEOUT_MS);
+    let timeout = timings::delay::PREVIEW_COMMAND_TIMEOUT;
     let paths = proc::preview_command(program, args, dir, scroll + read_lines, timeout).ok()?;
     let mut rows = tree_rows(&paths);
     rows.drain(..scroll.min(rows.len()));

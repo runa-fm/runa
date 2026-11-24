@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use crate::core::metadata::FileMetadataCache;
 use crate::utils::timings::Throttler;
@@ -44,12 +45,12 @@ impl FileInfoState {
             .is_some_and(|pending| pending.path == path)
     }
 
-    pub(super) fn try_request(&mut self, throttle_ms: u64) -> bool {
-        self.last_request_time.try_trigger(throttle_ms)
+    pub(super) fn try_request(&mut self, throttle: Duration) -> bool {
+        self.last_request_time.try_trigger(throttle)
     }
 
-    pub(super) fn take_queued(&mut self, throttle_ms: u64) -> bool {
-        self.last_request_time.take_queued(throttle_ms)
+    pub(super) fn take_queued(&mut self, throttle: Duration) -> bool {
+        self.last_request_time.take_queued(throttle)
     }
 
     pub(super) fn touch(&mut self) {

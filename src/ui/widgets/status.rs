@@ -1,7 +1,5 @@
 //! Widget module which holds status relevant draw functions for renderer.
 
-use std::time::Duration;
-
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -15,7 +13,7 @@ use crate::core::workers::FileOpCounts;
 use crate::ui::widgets::StatusPosition;
 use crate::{
     app::{AppState, Clipboard},
-    utils::Timings,
+    utils::timings,
 };
 
 pub(crate) fn draw_separator(frame: &mut Frame, area: Rect, style: Style, border_type: BorderType) {
@@ -139,7 +137,7 @@ pub(crate) fn draw_status_bar(
 
         if total_ops > 0
             && let Some(start) = app.worker_time()
-            && start.elapsed() >= Duration::from_millis(Timings::WORKER_INDICATOR_MS)
+            && start.elapsed() >= timings::delay::WORKER_INDICATOR
         {
             if active_ops > 0 {
                 let symbols: &[&str] = if use_icons {

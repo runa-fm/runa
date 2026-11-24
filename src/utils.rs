@@ -15,5 +15,3 @@ pub(crate) mod timings;
 
 #[macro_use]
 pub(crate) mod macros;
-
-pub(crate) use timings::Timings;

@@ -12,7 +12,7 @@ use ratatui::text::Span;
 
 use crate::app::{AppContainer, AppState, KeypressResult, keymap::TabAction};
 use crate::core::{listing::SortConfig, workers::Workers};
-use crate::utils::{Timings, path};
+use crate::utils::{path, timings};
 
 /// Maximum number of tabs runa opens.
 pub(crate) const MAX_TABS: usize = 9;
@@ -196,7 +196,7 @@ pub(crate) fn handle_tab_action(
                             (Err(e), _) | (_, Err(e)) => {
                                 app_state.push_overlay_message(
                                     format!("Could not open a new tab: {e}"),
-                                    Timings::MESSAGE,
+                                    timings::message::DEFAULT,
                                     None,
                                 );
                                 return KeypressResult::Consumed;
@@ -224,7 +224,7 @@ pub(crate) fn handle_tab_action(
                         Err(e) => {
                             tabs.current_tab_mut().push_overlay_message(
                                 format!("Could not open a new tab: {e}"),
-                                Timings::MESSAGE,
+                                timings::message::DEFAULT,
                                 None,
                             );
                             return KeypressResult::Consumed;

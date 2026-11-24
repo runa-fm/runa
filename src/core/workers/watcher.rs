@@ -8,7 +8,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crossbeam_channel::{Receiver, Sender, unbounded};
 use notify::{
@@ -17,7 +17,7 @@ use notify::{
 };
 
 use crate::core::workers::{WatchCommand, WorkerResponse};
-use crate::utils::{os, timings::Timings};
+use crate::utils::{os, timings};
 
 /// Starts the filesystem watcher thread.
 pub(super) fn start(cmd_rx: Receiver<WatchCommand>, res_tx: Sender<WorkerResponse>) {
@@ -174,8 +174,7 @@ impl WatchState {
 
     fn schedule_flush(&mut self) {
         if !self.pending.is_empty() && self.deadline.is_none() {
-            self.deadline =
-                Some(Instant::now() + Duration::from_millis(Timings::FS_WATCH_DEBOUNCE_MS));
+            self.deadline = Some(Instant::now() + timings::delay::FS_WATCH_DEBOUNCE);
         }
     }
 

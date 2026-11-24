@@ -5,7 +5,9 @@ All the changes made to runa are documented here.
 ## [0.15.8] - UNRELEASED
 
 ### Internal
-- **ANSI preview parser**: Replaced `ansi-to-tui` crate with an internal parser in `app/ansi.rs`. Avoids extra allocation and handles `Color::Reset` cleanup in previews better.
+- **ANSI preview parser**: Replaced `ansi-to-tui` crate with an internal parser in `utils/ansi.rs`. Avoids extra allocation and handles `Color::Reset` cleanup in previews better.
+- **Dev dependencies**: Removed `filetime` dev dependency in favour of `std::time::fs`.
+- **Refactor**: Split timing constants into `throttle`, `delay` and `message` submodules.
 
 
 ---

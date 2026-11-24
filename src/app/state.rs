@@ -14,7 +14,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use crossterm::event::KeyEvent;
 use ratatui::text::Span;
@@ -36,7 +36,7 @@ use crate::core::{
         Workers,
     },
 };
-use crate::utils::timings::{Throttler, Timings};
+use crate::utils::timings::{self, Throttler};
 
 /// Enumeration for each individual keypress result processed.
 ///
@@ -254,7 +254,7 @@ impl AppState {
         if !status_info && !info_overlay {
             return;
         }
-        if !self.file_info.try_request(Timings::FILE_INFO_THROTTLE_MS) {
+        if !self.file_info.try_request(timings::throttle::FILE_INFO) {
             return;
         }
 
@@ -321,7 +321,7 @@ impl AppState {
         if workers.active_fileops().load(Ordering::Relaxed) > 0 {
             let start = *self.worker_time.get_or_insert_with(Instant::now);
 
-            if start.elapsed() >= Duration::from_millis(Timings::WORKER_INDICATOR_MS) {
+            if start.elapsed() >= timings::delay::WORKER_INDICATOR {
                 changed = true;
             }
         } else if self.worker_time.is_some() {
@@ -346,14 +346,14 @@ impl AppState {
         // Handle preview request throttling for a tick
         if self
             .preview_request_time
-            .take_queued(Timings::PREVIEW_REQUEST_MS)
+            .take_queued(timings::throttle::PREVIEW_REQUEST)
         {
             self.request_preview(workers);
             changed = true;
         }
 
         // Metadata handler for file info and cache
-        if self.file_info.take_queued(Timings::FILE_INFO_THROTTLE_MS) {
+        if self.file_info.take_queued(timings::throttle::FILE_INFO) {
             self.update_file_info_cache(workers);
             changed = true;
         }
@@ -534,7 +534,7 @@ impl AppState {
                 DirRequest::Nav(request_id) => {
                     if request_id == self.nav.request_id() && path == self.nav.current_dir() {
                         self.is_loading = false;
-                        self.push_overlay_message(message, Timings::MESSAGE_WORKER_ERROR, None);
+                        self.push_overlay_message(message, timings::message::WORKER_ERROR, None);
                     }
                 }
                 DirRequest::Preview(request_id) => {
@@ -546,13 +546,13 @@ impl AppState {
                     if request_id == self.parent.request_id()
                         && self.nav.current_dir().parent() == Some(path.as_path())
                     {
-                        self.push_overlay_message(message, Timings::MESSAGE_WORKER_ERROR, None);
+                        self.push_overlay_message(message, timings::message::WORKER_ERROR, None);
                     }
                 }
             },
 
             WorkerResponse::Error(e) => {
-                self.push_overlay_message(e, Timings::MESSAGE_WORKER_ERROR, None);
+                self.push_overlay_message(e, timings::message::WORKER_ERROR, None);
             }
 
             WorkerResponse::ConfigChanged => {}
@@ -743,7 +743,7 @@ impl AppState {
             if !force
                 && !self
                     .preview_request_time
-                    .try_trigger(Timings::PREVIEW_REQUEST_MS)
+                    .try_trigger(timings::throttle::PREVIEW_REQUEST)
             {
                 return;
             }
