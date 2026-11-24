@@ -90,11 +90,16 @@ impl AppState {
     }
 
     /// Pushes a message overlay that lasts for the specified duration.
-    pub(crate) fn push_overlay_message(
+    pub(crate) fn push_overlay_message(&mut self, text: impl Into<String>, duration: Duration) {
+        self.push_overlay_message_aligned(text, duration, Alignment::Center);
+    }
+
+    /// Pushes a text aligned message overlay that lasts for the specified duration.
+    pub(crate) fn push_overlay_message_aligned(
         &mut self,
-        text: String,
+        text: impl Into<String>,
         duration: Duration,
-        alignment: Option<Alignment>,
+        alignment: Alignment,
     ) {
         self.notification_time = Some(Instant::now() + duration);
 
@@ -103,8 +108,8 @@ impl AppState {
         }
 
         self.overlays_mut().push(Overlay::Message {
-            text,
-            alignment: alignment.unwrap_or(Alignment::Center),
+            text: text.into(),
+            alignment,
         });
     }
 

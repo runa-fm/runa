@@ -14,7 +14,6 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use crate::app::{
     Clipboard, NavState,
@@ -156,11 +155,7 @@ impl AppState {
         let parent_path = parent.to_path_buf();
 
         if fs::metadata(&parent_path).is_err() {
-            self.push_overlay_message(
-                "Parent directory is unreachable".to_string(),
-                Duration::from_secs(3),
-                None,
-            );
+            self.push_overlay_message("Parent directory is unreachable", timings::message::DEFAULT);
             return KeypressResult::Consumed;
         }
 
@@ -194,8 +189,7 @@ impl AppState {
                 KeypressResult::Continue
             }
             Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-                let msg = format!("Permission Denied: {}", e);
-                self.push_overlay_message(msg, Duration::from_secs(3), None);
+                self.push_overlay_message(e.to_string(), timings::message::DEFAULT);
                 KeypressResult::Consumed
             }
             Err(_) => KeypressResult::Continue,
@@ -231,7 +225,7 @@ impl AppState {
 
         if let Err(e) = fs::read_dir(&target_dir) {
             let msg = format!("Access Denied: {}", e);
-            self.push_overlay_message(msg, Duration::from_secs(3), None);
+            self.push_overlay_message(msg, timings::message::DEFAULT);
             return;
         }
         self.navigate_to(target_dir, focus, workers);
@@ -247,11 +241,7 @@ impl AppState {
     pub(super) fn handle_go_to_path(&mut self, workers: &Workers) {
         let path = self.actions.input_buffer();
         if path.trim().is_empty() {
-            self.push_overlay_message(
-                "Error: No path entered".to_string(),
-                Duration::from_secs(3),
-                None,
-            );
+            self.push_overlay_message("Error: No path entered", timings::message::DEFAULT);
             return;
         }
 
@@ -266,18 +256,10 @@ impl AppState {
             if meta.is_dir() {
                 self.navigate_to(abs_path.clone(), None, workers);
             } else {
-                self.push_overlay_message(
-                    "Error: Not a directory".to_string(),
-                    Duration::from_secs(3),
-                    None,
-                );
+                self.push_overlay_message("Error: Not a directory", timings::message::DEFAULT);
             }
         } else {
-            self.push_overlay_message(
-                "Error: Invalid path".to_string(),
-                Duration::from_secs(3),
-                None,
-            );
+            self.push_overlay_message("Error: Invalid path", timings::message::DEFAULT);
         }
     }
 

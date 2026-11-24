@@ -197,7 +197,6 @@ pub(crate) fn handle_tab_action(
                                 app_state.push_overlay_message(
                                     format!("Could not open a new tab: {e}"),
                                     timings::message::DEFAULT,
-                                    None,
                                 );
                                 return KeypressResult::Consumed;
                             }
@@ -225,7 +224,6 @@ pub(crate) fn handle_tab_action(
                             tabs.current_tab_mut().push_overlay_message(
                                 format!("Could not open a new tab: {e}"),
                                 timings::message::DEFAULT,
-                                None,
                             );
                             return KeypressResult::Consumed;
                         }

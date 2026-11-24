@@ -534,7 +534,7 @@ impl AppState {
                 DirRequest::Nav(request_id) => {
                     if request_id == self.nav.request_id() && path == self.nav.current_dir() {
                         self.is_loading = false;
-                        self.push_overlay_message(message, timings::message::WORKER_ERROR, None);
+                        self.push_overlay_message(message, timings::message::WORKER_ERROR);
                     }
                 }
                 DirRequest::Preview(request_id) => {
@@ -546,13 +546,13 @@ impl AppState {
                     if request_id == self.parent.request_id()
                         && self.nav.current_dir().parent() == Some(path.as_path())
                     {
-                        self.push_overlay_message(message, timings::message::WORKER_ERROR, None);
+                        self.push_overlay_message(message, timings::message::WORKER_ERROR);
                     }
                 }
             },
 
             WorkerResponse::Error(e) => {
-                self.push_overlay_message(e, timings::message::WORKER_ERROR, None);
+                self.push_overlay_message(e, timings::message::WORKER_ERROR);
             }
 
             WorkerResponse::ConfigChanged => {}

@@ -110,11 +110,11 @@ impl RunaRoot {
         execute!(writer, LeaveAlternateScreen, EnterAlternateScreen, Hide,)?;
         match &mut self.container {
             AppContainer::Single(app) => {
-                app.push_overlay_message("UI reloaded!".into(), timings::message::SHORT, None);
+                app.push_overlay_message("UI reloaded!", timings::message::SHORT);
             }
             AppContainer::Tabs(tabs) => {
                 for tab in tabs.iter_mut() {
-                    tab.push_overlay_message("UI reloaded!".into(), timings::message::SHORT, None);
+                    tab.push_overlay_message("UI reloaded!", timings::message::SHORT);
                 }
             }
         }
@@ -176,9 +176,8 @@ impl RunaRoot {
                     AppContainer::Single(app) => {
                         app.apply_new_config(Arc::clone(&new_config));
                         app.push_overlay_message(
-                            "Configuration reloaded!".into(),
+                            "Configuration reloaded!",
                             timings::message::SHORT,
-                            None,
                         );
                     }
                     AppContainer::Tabs(tabs) => {
@@ -187,9 +186,8 @@ impl RunaRoot {
                         }
                         tabs.sync_tab_line();
                         tabs.current_tab_mut().push_overlay_message(
-                            "Configuration reloaded!".into(),
+                            "Configuration reloaded!",
                             timings::message::SHORT,
-                            None,
                         );
                     }
                 }
@@ -198,7 +196,7 @@ impl RunaRoot {
                 self.config_reload_throttler.touch();
                 self.container
                     .current_mut()
-                    .push_overlay_message(e, timings::message::LONG, None);
+                    .push_overlay_message(e, timings::message::LONG);
             }
         }
     }

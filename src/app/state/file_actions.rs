@@ -31,7 +31,7 @@ use crate::app::{
 use crate::config::commands::{self, RunMode};
 use crate::config::editor::EditorCommand;
 use crate::core::workers::{CommandTask, Workers};
-use crate::utils::{path, timings::message};
+use crate::utils::{path, timings};
 
 /// AppState file action handlers
 impl AppState {
@@ -104,8 +104,8 @@ impl AppState {
                     ext_parts,
                 } => {
                     let Some(binary) = args.first() else {
-                        let msg = "No editor command configured".to_string();
-                        self.push_overlay_message(msg, message::DEFAULT, None);
+                        let msg = "No editor command configured";
+                        self.push_overlay_message(msg, timings::message::DEFAULT);
                         return KeypressResult::Continue;
                     };
                     let args = commands::expand_args(args, ext_parts, &path);
@@ -115,7 +115,7 @@ impl AppState {
 
             let Ok(program) = which::which(binary) else {
                 let msg = format!("Editor '{}' not found", binary);
-                self.push_overlay_message(msg, message::DEFAULT, None);
+                self.push_overlay_message(msg, timings::message::DEFAULT);
                 return KeypressResult::Continue;
             };
 
@@ -133,9 +133,8 @@ impl AppState {
         let dest_dir = self.actions.input_buffer();
         if dest_dir.trim().is_empty() {
             self.push_overlay_message(
-                "Move failed: target directory cannot be empty".to_string(),
-                message::DEFAULT,
-                None,
+                "Move failed: target directory cannot be empty",
+                timings::message::DEFAULT,
             );
             return;
         }
@@ -153,8 +152,7 @@ impl AppState {
                 let norm_msg = path::format_display_path(&resolved_path);
                 self.push_overlay_message(
                     format!("Move failed: {}: {}", e, norm_msg),
-                    message::DEFAULT,
-                    None,
+                    timings::message::DEFAULT,
                 );
                 return;
             }
@@ -164,8 +162,7 @@ impl AppState {
             let norm_msg = path::format_display_path(&absolute_dest);
             self.push_overlay_message(
                 format!("Move failed: not a directory: {}", norm_msg),
-                message::DEFAULT,
-                None,
+                timings::message::DEFAULT,
             );
             return;
         }
@@ -174,8 +171,7 @@ impl AppState {
             let norm_msg = path::format_display_path(&absolute_dest);
             self.push_overlay_message(
                 format!("Move failed: Permission denied in {}: {}", norm_msg, e),
-                message::DEFAULT,
-                None,
+                timings::message::DEFAULT,
             );
             return;
         }
@@ -195,7 +191,7 @@ impl AppState {
                         display_path
                     )
                 };
-                self.push_overlay_message(msg, message::DEFAULT, None);
+                self.push_overlay_message(msg, timings::message::DEFAULT);
                 return;
             }
         }
@@ -210,7 +206,7 @@ impl AppState {
             .actions_move(&mut self.nav, absolute_dest, fileop_tx);
 
         self.exit_input_mode();
-        self.push_overlay_message(move_msg, message::DEFAULT, None);
+        self.push_overlay_message(move_msg, timings::message::DEFAULT);
     }
 
     /// Creates a new file with the name in the input buffer.
@@ -283,11 +279,7 @@ impl AppState {
         }
 
         if !path::is_valid_entry_name(self.actions.input_buffer()) {
-            self.push_overlay_message(
-                "Rename failed: invalid name.".to_string(),
-                message::DEFAULT,
-                None,
-            );
+            self.push_overlay_message("Rename failed: invalid name.", timings::message::DEFAULT);
             return;
         }
 
@@ -384,7 +376,7 @@ impl AppState {
 
         let Some(binary) = cmd.first() else {
             let msg = format!("Command '{}' has no program", user_command.name());
-            self.push_overlay_message(msg, message::DEFAULT, None);
+            self.push_overlay_message(msg, timings::message::DEFAULT);
             return KeypressResult::Continue;
         };
 
@@ -395,7 +387,7 @@ impl AppState {
         let args = if commands::has_file_variables(cmd) {
             let Some(name) = &selected else {
                 let msg = format!("Command '{}' needs a selected file", user_command.name());
-                self.push_overlay_message(msg, message::DEFAULT, None);
+                self.push_overlay_message(msg, timings::message::DEFAULT);
                 return KeypressResult::Continue;
             };
 
@@ -406,7 +398,7 @@ impl AppState {
 
         let Ok(program) = which::which(binary) else {
             let msg = format!("Command '{}' not found", binary);
-            self.push_overlay_message(msg, message::DEFAULT, None);
+            self.push_overlay_message(msg, timings::message::DEFAULT);
             return KeypressResult::Continue;
         };
 
@@ -436,7 +428,7 @@ impl AppState {
                     KeypressResult::OpenedEditor
                 }
                 Err(e) => {
-                    self.push_overlay_message(e.to_string(), message::DEFAULT, None);
+                    self.push_overlay_message(e.to_string(), timings::message::DEFAULT);
                     KeypressResult::Recovered
                 }
             },
@@ -459,8 +451,8 @@ impl AppState {
             check_status,
         };
         if workers.runner_tx().send(task).is_err() {
-            let msg = "Command runner is not running".to_string();
-            self.push_overlay_message(msg, message::DEFAULT, None);
+            let msg = "Command runner is not running";
+            self.push_overlay_message(msg, timings::message::DEFAULT);
         }
     }
 

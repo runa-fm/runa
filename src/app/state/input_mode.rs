@@ -24,7 +24,7 @@ use crate::app::{
 use crate::core::listing::{SortConfig, SortOrder};
 use crate::core::proc;
 use crate::core::workers::Workers;
-use crate::utils::{os, path};
+use crate::utils::{os, path, timings};
 
 /// AppState input handlers
 impl AppState {
@@ -369,9 +369,8 @@ impl AppState {
     pub(super) fn prompt_find(&mut self) {
         if os::fd_binary().is_err() {
             self.push_overlay_message(
-                "Fuzzy Find requires the `fd` tool.".to_string(),
-                Duration::from_secs(5),
-                None,
+                "Fuzzy Find requires the `fd` tool.",
+                timings::message::DEFAULT,
             );
             return;
         }
