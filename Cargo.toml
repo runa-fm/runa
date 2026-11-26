@@ -54,20 +54,20 @@ which = "8.0.6"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 crossterm = { version = "0.29.0", default-features = false, features = ["events", "windows"] }
-trash = { version = "5.3.0", default-features = false, features = ["coinit_apartmentthreaded"] }
+trash = { version = "5.4.0", default-features = false, features = ["coinit_apartmentthreaded"] }
 
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 crossterm = { version = "0.29.0", default-features = false, features = ["events"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 notify = { version = "8.2.2", default-features = true }
-trash = { version = "5.3.0", default-features = false }
+trash = { version = "5.4.0", default-features = false }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 notify = { version = "8.2.2", default-features = false }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-trash = { version = "5.3.0", default-features = false, features = ["freedesktop"] }
+trash = { version = "5.4.0", default-features = false, features = ["freedesktop"] }
 
 [target.'cfg(unix)'.dependencies]
 uzers = { version = "0.12.2", default-features = false }
