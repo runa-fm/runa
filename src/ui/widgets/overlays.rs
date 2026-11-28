@@ -14,6 +14,7 @@ use crate::config::{
 };
 use crate::core::metadata::FileMetadataCache;
 use crate::ui::widgets::{self, DialogLayout};
+use crate::utils::ansi;
 
 type HelpRow = (String, &'static str);
 
@@ -238,12 +239,9 @@ pub(crate) fn draw_message_overlay(
     let position = DialogPosition::BottomRight;
     let border_type = app.config().display().border_type();
 
-    let mut max_line_width = 0;
-    let mut line_count = 0;
-    for line in text.lines() {
-        max_line_width = max_line_width.max(line.len());
-        line_count += 1;
-    }
+    let parsed = ansi::parse_lines(text.lines().map(str::to_owned).collect());
+    let max_line_width = parsed.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+    let line_count = parsed.lines.len();
 
     let min_width = 8;
     let border_pad = 2;
@@ -271,7 +269,7 @@ pub(crate) fn draw_message_overlay(
         custom_layout,
         border_type,
         &widgets::get_dialog_style(app, accent_style, "Message", None),
-        text,
+        parsed,
         Some(alignment),
         None,
     );

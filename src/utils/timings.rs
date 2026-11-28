@@ -32,7 +32,7 @@ pub(crate) mod message {
 
     pub(crate) const SHORT: Duration = Duration::from_secs(2);
     pub(crate) const DEFAULT: Duration = Duration::from_secs(3);
-    pub(crate) const LONG: Duration = Duration::from_secs(5);
+    pub(crate) const LONG: Duration = Duration::from_secs(6);
     pub(crate) const WORKER_ERROR: Duration = Duration::from_secs(7);
 }
 
