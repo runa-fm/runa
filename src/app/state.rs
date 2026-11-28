@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::text::Span;
+use ratatui::{layout::Alignment, text::Span};
 
 use crate::app::{
     Clipboard, NavState, ParentState, PreviewData, PreviewState, TrashState,
@@ -542,7 +542,11 @@ impl AppState {
             }
 
             WorkerResponse::Message(msg) => {
-                self.push_overlay_message(msg, timings::message::DEFAULT);
+                if msg.contains('\n') {
+                    self.push_overlay_message_aligned(msg, timings::message::LONG, Alignment::Left);
+                } else {
+                    self.push_overlay_message(msg, timings::message::DEFAULT);
+                }
             }
 
             WorkerResponse::CommandOutput {
@@ -560,7 +564,15 @@ impl AppState {
             }
 
             WorkerResponse::Error(e) => {
-                self.push_overlay_message(e, timings::message::WORKER_ERROR);
+                if e.contains('\n') {
+                    self.push_overlay_message_aligned(
+                        e,
+                        timings::message::WORKER_ERROR,
+                        Alignment::Left,
+                    );
+                } else {
+                    self.push_overlay_message(e, timings::message::WORKER_ERROR);
+                }
             }
 
             WorkerResponse::ConfigChanged => {}

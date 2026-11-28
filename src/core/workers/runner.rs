@@ -15,6 +15,9 @@ use crate::core::workers::{CommandMode, CommandTask, WorkerResponse};
 /// Bytes of stderr kept for the error message.
 const MESSAGE_KEEP_BYTES: u64 = 4096;
 
+/// Max lines shown in a non-modal message toast.
+const MESSAGE_MAX_LINES: usize = 12;
+
 // Max bytes kept per stream for the overlay output.
 const OVERLAY_MAX_BYTES: u64 = 128 * 1024;
 
@@ -120,6 +123,29 @@ fn first_non_empty_line(bytes: &[u8]) -> Option<String> {
         .map(str::to_owned)
 }
 
+fn collect_message_lines(primary: &[u8], fallback: &[u8], truncated: bool) -> Option<String> {
+    let source = if primary.iter().any(|b| !b.is_ascii_whitespace()) {
+        primary
+    } else {
+        fallback
+    };
+
+    let text = String::from_utf8_lossy(source);
+    let mut lines = text
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty());
+
+    let mut kept: Vec<&str> = lines.by_ref().take(MESSAGE_MAX_LINES).collect();
+    if kept.is_empty() {
+        return None;
+    }
+    if truncated || lines.next().is_some() {
+        kept.push("...");
+    }
+    Some(kept.join("\n"))
+}
+
 fn capture_streams(child: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
     let stderr_handle = child
         .stderr
@@ -184,23 +210,21 @@ fn wait_for(mut child: Child, name: &str, mode: CommandMode, res_tx: &Sender<Wor
             let _ = res_tx.send(WorkerResponse::Error(message));
         }
         CommandMode::Message => {
-            let (stdout, stderr, _) = capture_streams(&mut child, MESSAGE_KEEP_BYTES);
+            let (stdout, stderr, truncated) = capture_streams(&mut child, MESSAGE_KEEP_BYTES);
 
             let response = match child.wait() {
                 Ok(status) if status.success() => {
-                    let line =
-                        first_non_empty_line(&stdout).or_else(|| first_non_empty_line(&stderr));
-                    let msg = match line {
-                        Some(line) => format!("{name}: {line}"),
+                    let msg = match collect_message_lines(&stdout, &stderr, truncated) {
+                        Some(text) if text.contains('\n') => format!("{name}:\n{text}"),
+                        Some(line) => format!("{name}: {}", line.trim()),
                         None => format!("{name}: done"),
                     };
                     WorkerResponse::Message(msg)
                 }
                 Ok(status) => {
-                    let line =
-                        first_non_empty_line(&stderr).or_else(|| first_non_empty_line(&stdout));
-                    let msg = match line {
-                        Some(line) => format!("{name}: {status}: {line}"),
+                    let msg = match collect_message_lines(&stderr, &stdout, truncated) {
+                        Some(text) if text.contains('\n') => format!("{name}: {status}\n{text}"),
+                        Some(line) => format!("{name}: {status}: {}", line.trim()),
                         None => format!("{name}: {status}"),
                     };
                     WorkerResponse::Error(msg)
@@ -359,6 +383,25 @@ mod tests {
         let (res_rx, _dir) = run_mode("sh", &["-c", "echo pushed >&2"], CommandMode::Message);
         match res_rx.recv_timeout(TIMEOUT) {
             Ok(WorkerResponse::Message(msg)) => assert_eq!(msg, "sh: pushed"),
+            other => panic!("expected message, got {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn message_mode_keeps_multiline_output_up_to_cap() {
+        let (res_rx, _dir) = run_mode(
+            "sh",
+            &[
+                "-c",
+                "printf 'To remote\\n   abc..def  main -> main\\n' >&2",
+            ],
+            CommandMode::Message,
+        );
+        match res_rx.recv_timeout(TIMEOUT) {
+            Ok(WorkerResponse::Message(msg)) => {
+                assert_eq!(msg, "sh:\nTo remote\n   abc..def  main -> main");
+            }
             other => panic!("expected message, got {other:?}"),
         }
     }
