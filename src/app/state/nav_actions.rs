@@ -41,12 +41,10 @@ impl AppState {
             }
             NavAction::GoParent => {
                 let res = self.handle_go_parent(workers);
-                self.refresh_show_info_if_open();
                 return res;
             }
             NavAction::GoIntoDir => {
                 let res = self.handle_go_into_dir(workers);
-                self.refresh_show_info_if_open();
                 return res;
             }
             NavAction::ToggleMarker => {
@@ -73,7 +71,6 @@ impl AppState {
             }
             NavAction::GoToBottom => {
                 self.nav.last_selected();
-                self.refresh_show_info_if_open();
                 self.update_file_info_cache(workers);
                 self.preview.mark_pending();
             }
@@ -124,7 +121,6 @@ impl AppState {
         };
 
         if allow_immediate {
-            self.refresh_show_info_if_open();
             self.update_file_info_cache(workers);
 
             if selected_changed_preview {
@@ -189,7 +185,8 @@ impl AppState {
                 KeypressResult::Continue
             }
             Err(e) if e.kind() == io::ErrorKind::PermissionDenied => {
-                self.push_overlay_message(e.to_string(), timings::message::DEFAULT);
+                let msg = format!("'{}': Permission denied", entry.name_str());
+                self.push_overlay_message(msg, timings::message::DEFAULT);
                 KeypressResult::Consumed
             }
             Err(_) => KeypressResult::Continue,

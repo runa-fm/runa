@@ -3,7 +3,6 @@
 //! This module defines the overlay-related functions for the central
 //! [app::state::handle_keypress](AppState::handle_keypress) function.
 
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use crossterm::event::{KeyCode::*, KeyEvent};
@@ -11,7 +10,7 @@ use ratatui::layout::Alignment;
 
 use crate::app::overlay_stack::{Overlay, OverlayKind};
 use crate::app::state::{AppState, KeypressResult};
-use crate::core::metadata::FileMetadataCache;
+use crate::core::workers::Workers;
 
 /// AppState input and action handlers
 impl AppState {
@@ -32,38 +31,25 @@ impl AppState {
         None
     }
 
+    pub(crate) fn transfer_shared_overlays_to(&mut self, target: &mut AppState) {
+        let shared = self.overlays.take_shared(&mut self.notification_time);
+        target
+            .overlays
+            .restore_shared(shared, &mut target.notification_time);
+    }
+
     /// Handles displaying a timed message overlay.
     pub(super) fn handle_timed_message(&mut self, duration: Duration) {
         self.notification_time = Some(Instant::now() + duration);
     }
 
-    // Input processes
-
-    /// Refreshes the file info overlay if it is currently open.
-    pub(crate) fn refresh_show_info_if_open(&mut self) {
-        if let Some(new_info) = self.selected_file_info_clone()
-            && let Some(info_slot) = self.overlays_mut().find_show_info_mut()
-            && !Arc::ptr_eq(&new_info, info_slot)
-        {
-            *info_slot = new_info;
-        }
-    }
-
-    /// Shows the file info overlay for the currently selected entry.
-    fn show_file_info(&mut self) {
-        if let Some(info) = self.selected_file_info_clone() {
-            self.overlays_mut().push(Overlay::ShowInfo { info });
-        }
-    }
-
     /// Toggles the file info overlay.
-    pub(super) fn toggle_file_info(&mut self) {
-        let is_open = self.overlays().is_open(OverlayKind::ShowInfo);
-
-        if is_open {
+    pub(super) fn toggle_file_info(&mut self, workers: &Workers) {
+        if self.overlays().is_open(OverlayKind::ShowInfo) {
             self.overlays_mut().remove_kind(OverlayKind::ShowInfo);
         } else {
-            self.show_file_info();
+            self.overlays_mut().push(Overlay::ShowInfo);
+            self.update_file_info_cache(workers);
         }
     }
 
@@ -111,9 +97,5 @@ impl AppState {
             text: text.into(),
             alignment,
         });
-    }
-
-    fn selected_file_info_clone(&self) -> Option<Arc<FileMetadataCache>> {
-        self.file_info.selected_arc().map(Arc::clone)
     }
 }

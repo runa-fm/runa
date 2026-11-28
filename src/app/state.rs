@@ -202,8 +202,6 @@ impl AppState {
         self.file_info.selected()
     }
 
-    // Entry functions
-
     pub(crate) fn visible_selected(&self) -> Option<usize> {
         if self.nav.entries().is_empty() {
             None
@@ -243,55 +241,6 @@ impl AppState {
             } else {
                 self.preview.mark_pending();
             }
-        }
-    }
-
-    /// Update the file info cache by requesting a metadata load.
-    pub(crate) fn update_file_info_cache(&mut self, workers: &Workers) {
-        let status_info = self.config.display().info().status_bar();
-        let info_overlay = self.overlays().is_open(OverlayKind::ShowInfo);
-
-        if !status_info && !info_overlay {
-            return;
-        }
-        if !self.file_info.try_request(timings::throttle::FILE_INFO) {
-            return;
-        }
-
-        let Some(entry) = self.nav.selected_entry() else {
-            self.file_info.clear();
-            return;
-        };
-
-        if let Some(selected_cache) = self.file_info.selected_arc()
-            && entry.name() == selected_cache.name()
-        {
-            return;
-        }
-
-        let path = self.nav.current_dir().join(entry.name());
-        if self.file_info.is_pending_path(&path) {
-            return;
-        }
-
-        let request_id = self.file_info.prepare_new_request();
-        let date_format = self.config.display().info().date_format();
-
-        let needs = self.metadata_needs();
-
-        if workers
-            .metadata_tx()
-            .try_send(MetadataTask {
-                path: path.clone(),
-                date_format: date_format.to_string(),
-                needs,
-                request_id,
-                tab_id: self.tab_id(),
-            })
-            .is_ok()
-        {
-            self.file_info.touch();
-            self.file_info.set_pending(request_id, path);
         }
     }
 
@@ -402,7 +351,6 @@ impl AppState {
                         self.request_parent_content(workers);
                         self.request_preview_force(workers);
                         self.update_file_info_cache(workers);
-                        self.refresh_show_info_if_open();
                     }
                 }
                 DirRequest::Preview(request_id) => {
@@ -506,7 +454,6 @@ impl AppState {
                 if self.file_info.matches_pending(request_id, &path) {
                     if path.parent() == Some(self.nav.current_dir()) {
                         self.file_info.set_selected(Some(metadata));
-                        self.refresh_show_info_if_open();
                     }
                     self.file_info.clear_pending();
                 }
@@ -690,6 +637,55 @@ impl AppState {
             request: DirRequest::Nav(request_id),
             tab_id: self.tab_id(),
         });
+    }
+
+    /// Update the file info cache by requesting a metadata load.
+    pub(crate) fn update_file_info_cache(&mut self, workers: &Workers) {
+        let status_info = self.config.display().info().status_bar();
+        let info_overlay = self.overlays().is_open(OverlayKind::ShowInfo);
+
+        if !status_info && !info_overlay {
+            return;
+        }
+        if !self.file_info.try_request(timings::throttle::FILE_INFO) {
+            return;
+        }
+
+        let Some(entry) = self.nav.selected_entry() else {
+            self.file_info.clear();
+            return;
+        };
+
+        if let Some(selected_cache) = self.file_info.selected_arc()
+            && entry.name() == selected_cache.name()
+        {
+            return;
+        }
+
+        let path = self.nav.current_dir().join(entry.name());
+        if self.file_info.is_pending_path(&path) {
+            return;
+        }
+
+        let request_id = self.file_info.prepare_new_request();
+        let date_format = self.config.display().info().date_format();
+
+        let needs = self.metadata_needs();
+
+        if workers
+            .metadata_tx()
+            .try_send(MetadataTask {
+                path: path.clone(),
+                date_format: date_format.to_string(),
+                needs,
+                request_id,
+                tab_id: self.tab_id(),
+            })
+            .is_ok()
+        {
+            self.file_info.touch();
+            self.file_info.set_pending(request_id, path);
+        }
     }
 
     pub(crate) fn dir_list_options(&self) -> DirListOptions {

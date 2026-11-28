@@ -67,7 +67,7 @@ impl AppState {
             FileAction::Create => self.prompt_create_file(),
             FileAction::CreateDirectory => self.prompt_create_folder(),
             FileAction::Filter => self.prompt_filter(),
-            FileAction::ShowInfo => self.toggle_file_info(),
+            FileAction::ShowInfo => self.toggle_file_info(workers),
             FileAction::Find => self.prompt_find(),
             FileAction::MoveFile => self.prompt_move(),
             FileAction::ClearClipboard => {

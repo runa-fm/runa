@@ -108,16 +108,10 @@ impl RunaRoot {
 
         self.ui_reload_throttler.touch();
         execute!(writer, LeaveAlternateScreen, EnterAlternateScreen, Hide,)?;
-        match &mut self.container {
-            AppContainer::Single(app) => {
-                app.push_overlay_message("UI reloaded!", timings::message::SHORT);
-            }
-            AppContainer::Tabs(tabs) => {
-                for tab in tabs.iter_mut() {
-                    tab.push_overlay_message("UI reloaded!", timings::message::SHORT);
-                }
-            }
-        }
+        self.container
+            .current_mut()
+            .push_overlay_message("UI reloaded!", timings::message::SHORT);
+
         Ok(true)
     }
 

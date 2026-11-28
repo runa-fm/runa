@@ -34,6 +34,7 @@ impl TabManager {
         new_tab.set_tab_id(1);
 
         new_tab.initialize(workers, focus);
+        existing.transfer_shared_overlays_to(&mut new_tab);
 
         let mut manager = Self {
             tabs: vec![existing, new_tab],
@@ -134,27 +135,38 @@ impl TabManager {
 
         tab.set_tab_id(self.next_tab_id);
         self.next_tab_id = self.next_tab_id.saturating_add(1);
+
         tab.initialize(workers, focus);
+        self.current_tab_mut().transfer_shared_overlays_to(&mut tab);
+
         self.tabs.push(tab);
         self.current = self.tabs.len() - 1;
         self.sync_tab_line();
         self.current
     }
 
-    fn switch(&mut self, dir: isize) {
-        let n = self.tabs.len() as isize;
-        if n == 0 {
-            return;
-        }
-        self.current = ((self.current as isize + dir + n) % n) as usize;
+    fn select(&mut self, next: usize) -> bool {
+        let Ok([from, to]) = self.tabs.get_disjoint_mut([self.current, next]) else {
+            return false;
+        };
+
+        from.transfer_shared_overlays_to(to);
+        self.current = next;
         self.sync_tab_line();
+        true
     }
 
-    fn set_active(&mut self, idx: usize) {
-        if idx < self.tabs.len() {
-            self.current = idx;
-            self.sync_tab_line();
+    fn switch(&mut self, dir: isize) -> bool {
+        let n = self.tabs.len() as isize;
+        if n == 0 {
+            return false;
         }
+        let next = ((self.current as isize + dir + n) % n) as usize;
+        self.select(next)
+    }
+
+    fn set_active(&mut self, idx: usize) -> bool {
+        idx < self.tabs.len() && self.select(idx)
     }
 
     fn close_tab(&mut self, idx: usize) -> bool {
@@ -162,7 +174,7 @@ impl TabManager {
             return !self.tabs.is_empty();
         }
 
-        self.tabs.remove(idx);
+        let mut removed = self.tabs.remove(idx);
         if self.tabs.is_empty() {
             self.current = 0;
             false
@@ -170,6 +182,8 @@ impl TabManager {
             if self.current >= self.tabs.len() {
                 self.current = self.tabs.len() - 1;
             }
+
+            removed.transfer_shared_overlays_to(self.current_tab_mut());
             self.sync_tab_line();
             true
         }
@@ -245,25 +259,23 @@ pub(crate) fn handle_tab_action(
                     } else if tab.is_empty() {
                         return KeypressResult::Quit;
                     }
+
+                    activate_tab(container.current_mut(), workers);
                 }
             }
             KeypressResult::Consumed
         }
         TabAction::Next | TabAction::Prev | TabAction::Switch(_) => {
             if let AppContainer::Tabs(tabs) = container {
-                match action {
+                let switched = match action {
                     TabAction::Next => tabs.switch(1),
                     TabAction::Prev => tabs.switch(-1),
                     TabAction::Switch(n) => tabs.set_active(n as usize - 1),
                     _ => unreachable!(),
-                }
+                };
 
-                let active = tabs.current_tab_mut();
-                if active.nav().request_id() == 0 {
-                    active.initialize(workers, None);
-                } else {
-                    active.request_dir_reload(workers);
-                    active.request_parent_content(workers);
+                if switched {
+                    activate_tab(tabs.current_tab_mut(), workers);
                 }
             }
 
@@ -277,5 +289,15 @@ pub(crate) fn handle_sort_action(container: &mut AppContainer, config: SortConfi
         for tab in &mut mgr.tabs {
             tab.apply_sort_config(config);
         }
+    }
+}
+
+fn activate_tab(tab: &mut AppState, workers: &Workers) {
+    if tab.nav().request_id() == 0 {
+        tab.initialize(workers, None);
+    } else {
+        tab.request_dir_reload(workers);
+        tab.request_parent_content(workers);
+        tab.update_file_info_cache(workers);
     }
 }

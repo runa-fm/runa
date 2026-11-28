@@ -5,15 +5,12 @@
 //!
 //! Is used throughout the ui modules and in AppState handlers.
 
-use std::slice;
-use std::sync::Arc;
+use std::{slice, time::Instant};
 
 use ratatui::layout::Alignment;
 
-use crate::core::metadata::FileMetadataCache;
-
 pub(crate) enum Overlay {
-    ShowInfo { info: Arc<FileMetadataCache> },
+    ShowInfo,
     Message { text: String, alignment: Alignment },
     PrefixHelp,
     KeybindHelp,
@@ -31,13 +28,25 @@ pub(crate) struct OverlayStack {
     overlays: Vec<Overlay>,
 }
 
+pub(crate) struct SharedOverlays {
+    overlays: Vec<Overlay>,
+    notification_time: Option<Instant>,
+}
+
 impl Overlay {
     pub(crate) const fn kind(&self) -> OverlayKind {
         match self {
-            Overlay::ShowInfo { .. } => OverlayKind::ShowInfo,
+            Overlay::ShowInfo => OverlayKind::ShowInfo,
             Overlay::Message { .. } => OverlayKind::Message,
             Overlay::PrefixHelp => OverlayKind::PrefixHelp,
             Overlay::KeybindHelp => OverlayKind::KeybindHelp,
+        }
+    }
+
+    pub(crate) fn is_tab_shared(&self) -> bool {
+        match self {
+            Overlay::ShowInfo | Overlay::Message { .. } => true,
+            Overlay::PrefixHelp | Overlay::KeybindHelp => false,
         }
     }
 }
@@ -84,18 +93,46 @@ impl OverlayStack {
         self.top().map(|o| o.kind() == kind).unwrap_or(false)
     }
 
-    pub(crate) fn find_show_info_mut(&mut self) -> Option<&mut Arc<FileMetadataCache>> {
-        self.overlays.iter_mut().find_map(|o| match o {
-            Overlay::ShowInfo { info } => Some(info),
-            _ => None,
-        })
-    }
-
     pub(crate) fn needs_scroll(&self) -> bool {
         matches!(
             self.top(),
-            Some(Overlay::ShowInfo { .. }) | Some(Overlay::KeybindHelp)
+            Some(Overlay::ShowInfo) | Some(Overlay::KeybindHelp)
         )
+    }
+
+    pub(crate) fn take_shared(
+        &mut self,
+        notification_time: &mut Option<Instant>,
+    ) -> SharedOverlays {
+        let active_expiry = notification_time
+            .take()
+            .filter(|&expiry| expiry > Instant::now());
+
+        let overlays = self
+            .overlays
+            .extract_if(.., |o| o.is_tab_shared())
+            .filter(|o| !matches!(o, Overlay::Message { .. }) || active_expiry.is_some())
+            .collect();
+
+        SharedOverlays {
+            overlays,
+            notification_time: active_expiry,
+        }
+    }
+
+    pub(crate) fn restore_shared(
+        &mut self,
+        shared: SharedOverlays,
+        notification_time: &mut Option<Instant>,
+    ) {
+        for overlay in shared.overlays {
+            self.remove_kind(overlay.kind());
+            self.push(overlay);
+        }
+
+        if let Some(expiry) = shared.notification_time {
+            *notification_time = Some(expiry);
+        }
     }
 }
 

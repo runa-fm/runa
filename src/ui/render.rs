@@ -383,8 +383,10 @@ fn render_single_overlay(
     overlay: &Overlay,
 ) {
     match overlay {
-        Overlay::ShowInfo { info } => {
-            widgets::draw_show_info_dialog(frame, app, accent_style, info);
+        Overlay::ShowInfo => {
+            if let Some(info) = app.selected_file_info() {
+                widgets::draw_show_info_dialog(frame, app, accent_style, info);
+            }
         }
         Overlay::Message { text, alignment } => {
             widgets::draw_message_overlay(frame, app, accent_style, text, *alignment);

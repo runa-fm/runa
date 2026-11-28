@@ -244,17 +244,14 @@ impl AppState {
             PrefixCommand::Nav(NavAction::GoToTop) => {
                 self.handle_go_to_top(workers);
                 self.update_file_info_cache(workers);
-                self.refresh_show_info_if_open();
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToHome) => {
                 self.handle_go_to_home(workers);
-                self.refresh_show_info_if_open();
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToPath) => {
                 self.prompt_go_to_path();
-                self.refresh_show_info_if_open();
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Sort(sort_mode) => {
