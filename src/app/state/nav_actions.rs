@@ -16,7 +16,7 @@ use std::io;
 use std::path::PathBuf;
 
 use crate::app::{
-    Clipboard, NavState,
+    Clipboard, ListNav, NavState,
     keymap::NavAction,
     state::{AppState, KeypressResult},
 };
@@ -70,7 +70,7 @@ impl AppState {
                 self.preview.mark_pending();
             }
             NavAction::GoToBottom => {
-                self.nav.last_selected();
+                self.nav.select_last();
                 self.update_file_info_cache(workers);
                 self.preview.mark_pending();
             }
@@ -261,7 +261,7 @@ impl AppState {
     }
 
     pub(super) fn handle_go_to_top(&mut self, workers: &Workers) {
-        self.nav.first_selected();
+        self.nav.select_first();
         self.request_preview(workers);
     }
 

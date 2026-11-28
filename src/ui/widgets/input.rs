@@ -28,7 +28,6 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
 
         match mode {
             InputMode::ConfirmDelete { is_trash } => {
-                let confirm_size = widget.confirm_size();
                 let mut targets: Vec<String> = app
                     .nav()
                     .get_action_targets()
@@ -47,84 +46,35 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
                     "Files to delete"
                 };
 
-                let preview = if !targets.is_empty() {
-                    format!(
-                        "{heading} ({}):\n{}",
-                        targets.len(),
-                        targets
-                            .iter()
-                            .map(|n| format!("  - {}", n))
-                            .collect::<Vec<_>>()
-                            .join("\n")
-                    )
-                } else {
-                    String::new()
-                };
-
-                let dialog_area = widgets::dialog_area(frame.area(), confirm_size, position);
-                let visible_width = dialog_area.width.saturating_sub(2) as usize;
-
-                let mut dialog_lines = vec![
-                    Line::raw(prompt),
-                    Line::from(vec![Span::styled(
-                        "─".repeat(visible_width),
-                        widget.border_style_or(Style::default().fg(Color::Red)),
-                    )]),
-                ];
-                if !preview.is_empty() {
-                    for line in preview.lines() {
-                        dialog_lines.push(Line::raw(line));
-                    }
-                }
-                let dialog_text = Text::from(dialog_lines);
-
-                let dialog_layout = DialogLayout {
-                    area: frame.area(),
-                    position,
-                    size: confirm_size,
-                };
-
-                widgets::draw_dialog(
+                draw_confirm_list_dialog(
                     frame,
-                    dialog_layout,
-                    border_type,
-                    &widgets::get_dialog_style(
-                        app,
-                        Style::default().fg(Color::Red),
-                        "Confirm Delete",
-                        Some(Style::default().fg(Color::Red)),
-                    ),
-                    dialog_text,
-                    Some(Alignment::Left),
-                    Some(app.actions().scroll()),
+                    app,
+                    DialogLayout {
+                        area: frame.area(),
+                        position,
+                        size: widget.confirm_size(),
+                    },
+                    "Confirm Delete",
+                    prompt,
+                    heading,
+                    &targets,
                 );
             }
 
             InputMode::ConfirmTrash { empty } => {
-                let confirm_size = widget.confirm_size();
-                let dialog_area = widgets::dialog_area(frame.area(), confirm_size, position);
-                let visible_width = dialog_area.width.saturating_sub(2) as usize;
-
-                let mut dialog_lines = vec![
-                    Line::raw(prompt),
-                    Line::from(vec![Span::styled(
-                        "─".repeat(visible_width),
-                        widget.border_style_or(Style::default().fg(Color::Red)),
-                    )]),
-                ];
-
-                if !empty && let Some(trash) = app.trash() {
-                    let targets = trash.target_names();
-                    if !targets.is_empty() {
-                        dialog_lines.push(Line::raw(format!(
-                            "Items to permanently delete ({}):",
-                            targets.len()
-                        )));
-                        for name in targets {
-                            dialog_lines.push(Line::raw(format!("  - {name}")));
+                let targets = app
+                    .trash()
+                    .map(|trash| {
+                        if *empty {
+                            let mut names: Vec<String> =
+                                trash.items().iter().map(|e| e.name_str.clone()).collect();
+                            names.sort();
+                            names
+                        } else {
+                            trash.target_names()
                         }
-                    }
-                }
+                    })
+                    .unwrap_or_default();
 
                 let title = if *empty {
                     "Empty Trash"
@@ -132,23 +82,18 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
                     "Confirm Delete"
                 };
 
-                widgets::draw_dialog(
+                draw_confirm_list_dialog(
                     frame,
+                    app,
                     DialogLayout {
                         area: frame.area(),
                         position,
-                        size: confirm_size,
+                        size: widget.confirm_size(),
                     },
-                    border_type,
-                    &widgets::get_dialog_style(
-                        app,
-                        Style::default().fg(Color::Red),
-                        title,
-                        Some(Style::default().fg(Color::Red)),
-                    ),
-                    Text::from(dialog_lines),
-                    Some(Alignment::Left),
-                    Some(app.actions().scroll()),
+                    title,
+                    prompt,
+                    "Items to permanently delete",
+                    &targets,
                 );
             }
 
@@ -442,6 +387,51 @@ pub(crate) fn draw_find_dialog(frame: &mut Frame, app: &AppState, accent_style: 
         None,
     );
     frame.set_cursor_position((dialog_rect.x + 1 + cursor_x as u16, dialog_rect.y + 1));
+}
+
+fn draw_confirm_list_dialog(
+    frame: &mut Frame,
+    app: &AppState,
+    layout: DialogLayout,
+    title: &str,
+    prompt: &str,
+    heading: &str,
+    targets: &[String],
+) {
+    let widget = app.config().theme().widget();
+    let border_type = app.config().display().border_type();
+    let dialog_area = widgets::dialog_area(layout.area, layout.size, layout.position);
+    let visible_width = dialog_area.width.saturating_sub(2) as usize;
+
+    let mut dialog_lines = vec![
+        Line::raw(prompt),
+        Line::from(vec![Span::styled(
+            "─".repeat(visible_width),
+            widget.border_style_or(Style::default().fg(Color::Red)),
+        )]),
+    ];
+
+    if !targets.is_empty() {
+        dialog_lines.push(Line::raw(format!("{heading} ({}):", targets.len())));
+        for name in targets {
+            dialog_lines.push(Line::raw(format!("  - {name}")));
+        }
+    }
+
+    widgets::draw_dialog(
+        frame,
+        layout,
+        border_type,
+        &widgets::get_dialog_style(
+            app,
+            Style::default().fg(Color::Red),
+            title,
+            Some(Style::default().fg(Color::Red)),
+        ),
+        Text::from(dialog_lines),
+        Some(Alignment::Left),
+        Some(app.actions().scroll()),
+    );
 }
 
 /// Helper function to calculate cursor offset for cursor moving

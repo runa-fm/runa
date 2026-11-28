@@ -17,6 +17,7 @@ use crossterm::event::{KeyCode::*, KeyEvent};
 
 use crate::app::overlay_stack::OverlayKind;
 use crate::app::{
+    ListNav,
     actions::{ActionMode, InputMode},
     keymap::{Action, NavAction, PrefixCommand, SystemAction},
     state::{AppState, KeypressResult},
@@ -251,7 +252,7 @@ impl AppState {
         match prefix {
             PrefixCommand::Nav(NavAction::GoToTop) => {
                 if let Some(trash) = self.trash.as_mut() {
-                    trash.first();
+                    trash.select_first();
                 } else {
                     self.handle_go_to_top(workers);
                     self.update_file_info_cache(workers);

@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::ffi::{OsStr, OsString};
 use std::sync::Arc;
 
+use crate::app::ListNav;
 use crate::core::workers::TrashEntry;
 
 pub(crate) struct TrashState {
@@ -55,26 +56,6 @@ impl TrashState {
         self.loading = loading;
     }
 
-    pub(crate) fn move_up(&mut self) {
-        self.selected = self.selected.saturating_sub(1);
-    }
-
-    pub(crate) fn move_down(&mut self) {
-        if !self.items.is_empty() && self.selected + 1 < self.items.len() {
-            self.selected += 1;
-        }
-    }
-
-    pub(crate) fn first(&mut self) {
-        self.selected = 0;
-    }
-
-    pub(crate) fn last(&mut self) {
-        if !self.items.is_empty() {
-            self.selected = self.items.len() - 1;
-        }
-    }
-
     pub(crate) fn toggle_marker(&mut self) {
         let Some(entry) = self.items.get(self.selected) else {
             return;
@@ -83,6 +64,11 @@ impl TrashState {
         if !self.markers.remove(&id) {
             self.markers.insert(id);
         }
+    }
+
+    pub(crate) fn toggle_marker_advance(&mut self, jump: bool) {
+        self.toggle_marker();
+        self.advance_selection(jump);
     }
 
     pub(crate) fn select_all(&mut self) {
@@ -136,6 +122,16 @@ impl TrashState {
     }
 }
 
+impl ListNav for TrashState {
+    fn list_len(&self) -> usize {
+        self.items.len()
+    }
+
+    fn selected_mut(&mut self) -> &mut usize {
+        &mut self.selected
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -181,5 +177,35 @@ mod tests {
         assert_eq!(trash.target_names(), vec!["b.txt"]);
         assert_eq!(trash.target_items().len(), 1);
         assert_eq!(trash.target_items()[0].id, OsString::from("2"));
+    }
+
+    #[test]
+    fn navigation_wraps_and_marker_advances() {
+        let mut trash = TrashState::new_loading(true);
+        trash.update(
+            Arc::from([
+                entry("1", "a.txt"),
+                entry("2", "b.txt"),
+                entry("3", "c.txt"),
+            ]),
+            true,
+        );
+
+        trash.move_up();
+        assert_eq!(trash.selected(), 2);
+
+        trash.move_down();
+        assert_eq!(trash.selected(), 0);
+
+        trash.toggle_marker_advance(false);
+        assert_eq!(trash.selected(), 1);
+        assert!(trash.is_marked(OsStr::new("1")));
+
+        trash.select_last();
+        trash.toggle_marker_advance(false);
+        assert_eq!(trash.selected(), 2);
+
+        trash.toggle_marker_advance(true);
+        assert_eq!(trash.selected(), 0);
     }
 }

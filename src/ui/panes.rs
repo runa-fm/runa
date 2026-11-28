@@ -242,25 +242,12 @@ pub(super) fn draw_main(
         ));
     }
 
-    let mut state = ListState::default();
-    if app.has_visible_entries() {
-        state.select(selected_idx);
-    }
-
-    frame.render_stateful_widget(
-        List::new(items)
-            .block(
-                context
-                    .block
-                    .border_style(context.accent_style)
-                    .border_type(context.border_type),
-            )
-            .highlight_style(Style::default())
-            .highlight_symbol(context.highlight_symbol)
-            .scroll_padding(app.config().display().scroll_padding()),
-        context.area,
-        &mut state,
-    );
+    let selected = if app.has_visible_entries() {
+        selected_idx
+    } else {
+        None
+    };
+    render_entry_list(frame, items, selected, app, context);
 }
 
 /// Draws the preview pane, showing either the file content or directory listing
@@ -581,38 +568,30 @@ fn make_entry_row<'a>(
         .as_ref()
         .is_some_and(|set| set.contains(entry.name()));
 
-    let mut icon_style = if is_copied {
-        markers.clipboard_style
-    } else {
-        markers.marker_style
-    };
+    let icon_style = marker_icon_style(
+        if is_copied {
+            markers.clipboard_style
+        } else {
+            markers.marker_style
+        },
+        is_selected,
+        style.bg,
+    );
 
-    if is_selected
-        && icon_style.bg.is_none()
-        && let Some(bg) = style.bg
-    {
-        icon_style = icon_style.bg(bg);
-    }
-
-    let mut row_style = style;
+    let mut row_style = resolve_row_style(
+        entry.name_str(),
+        entry.is_dir(),
+        entry.ext(),
+        is_selected,
+        style,
+        context,
+    );
 
     let mut bar_bg = if is_selected {
         context.styles.selection.bg
     } else {
         None
     };
-
-    if let Some(override_style) =
-        context
-            .theme
-            .entry_color_override(entry.name_str(), entry.is_dir(), entry.ext())
-    {
-        row_style = row_style.patch(override_style);
-
-        if is_selected && let Some(bg) = style.bg {
-            row_style = row_style.bg(bg);
-        }
-    }
 
     if let Some(opts) = opts
         && is_selected
@@ -633,23 +612,14 @@ fn make_entry_row<'a>(
 
     let mut spans = Vec::with_capacity(10);
 
-    if (is_marked || is_copied) && !context.padding_str.is_empty() {
-        let first_char_len = context
-            .padding_str
-            .chars()
-            .next()
-            .map_or(0, |c| c.len_utf8());
-
-        let mut s = String::with_capacity(markers.marker_icon.len() + context.padding_str.len());
-        s.push_str(markers.marker_icon);
-        s.push_str(&context.padding_str[first_char_len..]);
-
-        used_w += UnicodeWidthStr::width(s.as_str());
-        spans.push(Span::styled(s, icon_style));
-    } else {
-        used_w += UnicodeWidthStr::width(context.padding_str);
-        spans.push(Span::raw(context.padding_str));
-    }
+    let (pad_span, pad_w) = marker_padding_span(
+        context.padding_str,
+        markers.marker_icon,
+        icon_style,
+        is_marked || is_copied,
+    );
+    used_w += pad_w;
+    spans.push(pad_span);
 
     let symlink_fg = if entry.is_broken_sym() {
         Color::Red
@@ -665,22 +635,14 @@ fn make_entry_row<'a>(
 
     if context.show_icons {
         let (icon, icon_custom_color) = icons::nerd_font_icon(entry, context.theme);
-
-        let mut icon_col = String::with_capacity(icon.len() + 1);
-        icon_col.push_str(icon);
-        icon_col.push(' ');
-
-        used_w += UnicodeWidthStr::width(icon_col.as_str());
-
-        let mut icon_render_style = row_style.add_modifier(Modifier::BOLD);
-
-        if entry.is_symlink() {
-            icon_render_style = icon_render_style.fg(symlink_fg);
-        } else if let Some(custom_color) = icon_custom_color {
-            icon_render_style = icon_render_style.fg(custom_color);
-        }
-
-        spans.push(Span::styled(icon_col, icon_render_style));
+        let (icon_span, icon_w) = make_icon_span(
+            icon,
+            icon_custom_color,
+            entry.is_symlink().then_some(symlink_fg),
+            row_style,
+        );
+        used_w += icon_w;
+        spans.push(icon_span);
     }
 
     let total_w = context.block.inner(context.area).width as usize;
@@ -906,6 +868,96 @@ fn right_col_for(
     }
 }
 
+fn resolve_row_style(
+    name: &str,
+    is_dir: bool,
+    ext: Option<&str>,
+    is_selected: bool,
+    style: Style,
+    context: &PaneContext,
+) -> Style {
+    let mut row_style = style;
+    if let Some(override_style) = context.theme.entry_color_override(name, is_dir, ext) {
+        row_style = row_style.patch(override_style);
+        if is_selected && let Some(bg) = style.bg {
+            row_style = row_style.bg(bg);
+        }
+    }
+    row_style
+}
+
+fn marker_icon_style(mut base: Style, is_selected: bool, row_bg: Option<Color>) -> Style {
+    if is_selected
+        && base.bg.is_none()
+        && let Some(bg) = row_bg
+    {
+        base = base.bg(bg);
+    }
+    base
+}
+
+fn make_icon_span(
+    icon: &str,
+    custom_color: Option<Color>,
+    symlink_fg: Option<Color>,
+    row_style: Style,
+) -> (Span<'static>, usize) {
+    let mut icon_col = String::with_capacity(icon.len() + 1);
+    icon_col.push_str(icon);
+    icon_col.push(' ');
+    let width = UnicodeWidthStr::width(icon_col.as_str());
+
+    let mut style = row_style.add_modifier(Modifier::BOLD);
+    if let Some(fg) = symlink_fg.or(custom_color) {
+        style = style.fg(fg);
+    }
+    (Span::styled(icon_col, style), width)
+}
+
+fn render_entry_list(
+    frame: &mut Frame,
+    items: Vec<ListItem<'_>>,
+    selected: Option<usize>,
+    app: &AppState,
+    context: PaneContext,
+) {
+    let mut state = ListState::default();
+    state.select(selected);
+
+    frame.render_stateful_widget(
+        List::new(items)
+            .block(
+                context
+                    .block
+                    .border_style(context.accent_style)
+                    .border_type(context.border_type),
+            )
+            .highlight_style(Style::default())
+            .highlight_symbol(context.highlight_symbol)
+            .scroll_padding(app.config().display().scroll_padding()),
+        context.area,
+        &mut state,
+    );
+}
+
+fn marker_padding_span<'a>(
+    padding_str: &'a str,
+    marker_icon: &str,
+    icon_style: Style,
+    show_marker: bool,
+) -> (Span<'a>, usize) {
+    if show_marker && !padding_str.is_empty() {
+        let first_char_len = padding_str.chars().next().map_or(0, char::len_utf8);
+        let mut s = String::with_capacity(marker_icon.len() + padding_str.len());
+        s.push_str(marker_icon);
+        s.push_str(&padding_str[first_char_len..]);
+        let w = UnicodeWidthStr::width(s.as_str());
+        (Span::styled(s, icon_style), w)
+    } else {
+        (Span::raw(padding_str), UnicodeWidthStr::width(padding_str))
+    }
+}
+
 fn draw_trash_main(frame: &mut Frame, app: &AppState, trash: &TrashState, context: PaneContext) {
     let empty_label = if !trash.supported() {
         Some("[Trash view is not supported on this OS]")
@@ -937,11 +989,10 @@ fn draw_trash_main(frame: &mut Frame, app: &AppState, trash: &TrashState, contex
     }
 
     let selected = trash.selected();
-    let use_icons = app.config().display().icons();
     let marker_theme = context.theme.marker();
     let marker_icon = marker_theme.icon();
     let marker_style = marker_theme.style_or_theme();
-    let has_markers = !trash.markers().is_empty();
+    let total_w = context.block.inner(context.area).width as usize;
 
     let items: Vec<ListItem> = trash
         .items()
@@ -951,54 +1002,55 @@ fn draw_trash_main(frame: &mut Frame, app: &AppState, trash: &TrashState, contex
             let is_selected = idx == selected;
             let is_dir = entry.is_dir();
             let style = context.styles.get_style(is_dir, is_selected);
+            let ext = Path::new(&entry.name_str)
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(str::to_lowercase);
+            let row_style = resolve_row_style(
+                &entry.name_str,
+                is_dir,
+                ext.as_deref(),
+                is_selected,
+                style,
+                &context,
+            );
+            let icon_style = marker_icon_style(marker_style, is_selected, style.bg);
+
             let mut spans = Vec::with_capacity(5);
+            let (pad_span, mut used_w) = marker_padding_span(
+                context.padding_str,
+                marker_icon,
+                icon_style,
+                trash.is_marked(&entry.item.id),
+            );
+            spans.push(pad_span);
 
-            spans.push(Span::raw(context.padding_str));
-
-            if has_markers {
-                if trash.is_marked(&entry.item.id) {
-                    spans.push(Span::styled(marker_icon, marker_style));
-                } else {
-                    spans.push(Span::raw(" ".repeat(marker_icon.width())));
-                }
+            if context.show_icons {
+                let (icon, custom_color) =
+                    icons::name_icon(&entry.name_str, is_dir, ext.as_deref(), context.theme);
+                let (icon_span, icon_w) = make_icon_span(icon, custom_color, None, row_style);
+                used_w += icon_w;
+                spans.push(icon_span);
             }
 
-            if use_icons {
-                let ext = Path::new(&entry.name_str)
-                    .extension()
-                    .and_then(|e| e.to_str());
-                let (icon, color) = icons::name_icon(&entry.name_str, is_dir, ext, context.theme);
-                let icon_style = match color {
-                    Some(c) if !is_selected => style.fg(c),
-                    _ => style,
-                };
-                spans.push(Span::styled(format!("{icon} "), icon_style));
+            let name_budget = total_w.saturating_sub(used_w).max(1);
+            let name = truncate_owned(&entry.name_str, name_budget);
+            used_w += UnicodeWidthStr::width(&*name);
+            spans.push(Span::styled(name, row_style));
+
+            if is_dir && context.show_marker && total_w.saturating_sub(used_w) >= 1 {
+                spans.push(Span::styled("/", row_style));
             }
 
-            spans.push(Span::styled(entry.name_str.as_str(), style));
-            ListItem::new(Line::from(spans)).style(if is_selected {
-                context.styles.selection
-            } else {
-                Style::default()
-            })
+            let bar_style = Style {
+                bg: is_selected.then_some(context.styles.selection.bg).flatten(),
+                ..row_style
+            };
+            ListItem::new(Line::from(spans)).style(bar_style)
         })
         .collect();
 
-    let mut state = ListState::default().with_selected(Some(selected));
-    frame.render_stateful_widget(
-        List::new(items)
-            .block(
-                context
-                    .block
-                    .border_style(context.accent_style)
-                    .border_type(context.border_type),
-            )
-            .highlight_style(Style::default())
-            .highlight_symbol(context.highlight_symbol)
-            .scroll_padding(app.config().display().scroll_padding()),
-        context.area,
-        &mut state,
-    );
+    render_entry_list(frame, items, Some(selected), app, context);
 }
 
 fn draw_trash_preview(frame: &mut Frame, app: &AppState, trash: &TrashState, context: PaneContext) {

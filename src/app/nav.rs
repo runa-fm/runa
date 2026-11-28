@@ -15,6 +15,64 @@ use crate::utils::{path, text::StrBuffer};
 const MAX_SAVED_POSITIONS: usize = 100;
 const MAX_SAVED_FILTERS: usize = 50;
 
+pub(crate) trait ListNav {
+    fn list_len(&self) -> usize;
+    fn selected_mut(&mut self) -> &mut usize;
+
+    fn move_up(&mut self) -> bool {
+        let len = self.list_len();
+        if len == 0 {
+            return false;
+        }
+
+        let selected = self.selected_mut();
+        *selected = if *selected == 0 {
+            len - 1
+        } else {
+            *selected - 1
+        };
+        true
+    }
+
+    fn move_down(&mut self) -> bool {
+        let len = self.list_len();
+        if len == 0 {
+            return false;
+        }
+
+        let selected = self.selected_mut();
+        *selected = (*selected + 1) % len;
+        true
+    }
+
+    fn select_first(&mut self) {
+        *self.selected_mut() = 0;
+    }
+
+    fn select_last(&mut self) {
+        let len = self.list_len();
+        if len > 0 {
+            *self.selected_mut() = len - 1;
+        }
+    }
+
+    fn advance_selection(&mut self, jump: bool) {
+        let len = self.list_len();
+        if len == 0 {
+            return;
+        }
+
+        let selected = self.selected_mut();
+        if *selected == len - 1 {
+            if jump {
+                *selected = 0;
+            }
+        } else {
+            *selected += 1;
+        }
+    }
+}
+
 /// Holds the navigation, selection and file list state of a pane.
 pub(crate) struct NavState {
     current_dir: PathBuf,
@@ -32,6 +90,16 @@ pub(crate) struct NavState {
     // UI releted fields
     sort_column: Option<Arc<StrBuffer>>,
     display_path: String,
+}
+
+impl ListNav for NavState {
+    fn list_len(&self) -> usize {
+        self.shown_indices.len()
+    }
+
+    fn selected_mut(&mut self) -> &mut usize {
+        &mut self.selected
+    }
 }
 
 impl NavState {
@@ -79,17 +147,6 @@ impl NavState {
         Arc::clone(&self.entries)
     }
 
-    pub(crate) fn first_selected(&mut self) -> usize {
-        self.selected = 0;
-        self.selected
-    }
-
-    pub(crate) fn last_selected(&mut self) {
-        if !self.shown_indices.is_empty() {
-            self.selected = self.shown_indices.len().saturating_sub(1);
-        }
-    }
-
     pub(crate) fn select_all(&mut self) {
         if self.entries.is_empty() {
             return;
@@ -108,34 +165,6 @@ impl NavState {
     pub(crate) fn prepare_new_request(&mut self) -> u64 {
         self.request_id = self.request_id.wrapping_add(1);
         self.request_id
-    }
-
-    /// Moves the selection up by one entry, wrapping around if necessary.
-    /// Returns `true` if the selection was moved, `false` if there are no entries.
-    pub(crate) fn move_up(&mut self) -> bool {
-        let len = self.shown_entries_len();
-        if len == 0 {
-            return false;
-        }
-
-        if self.selected == 0 {
-            self.selected = len - 1;
-        } else {
-            self.selected -= 1;
-        }
-        true
-    }
-
-    /// Moves the selection down by one entry, wrapping around if necessary.
-    /// Returns `true` if the selection was moved, `false` if there are no entries.
-    pub(crate) fn move_down(&mut self) -> bool {
-        let len = self.shown_entries_len();
-        if len == 0 {
-            return false;
-        }
-
-        self.selected = (self.selected + 1) % len;
-        true
     }
 
     /// Saves the current selection position for the current directory.
@@ -222,19 +251,7 @@ impl NavState {
     /// Toggles the marker state of the currently selected entry and advances the selection.
     pub(crate) fn toggle_marker_advance(&mut self, clipboard: &mut Clipboard, jump: bool) {
         self.toggle_marker(clipboard);
-        let count = self.shown_entries_len();
-
-        if count == 0 {
-            return;
-        }
-
-        if self.selected == count - 1 {
-            if jump {
-                self.selected = 0;
-            }
-        } else {
-            self.selected += 1;
-        }
+        self.advance_selection(jump);
     }
 
     /// Clears all markers.
