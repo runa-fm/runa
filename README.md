@@ -14,7 +14,7 @@
 </div>
 <div align="center">
 
-> **A fast, lightweight, and extremely customizable terminal file manager carved in Rust.**
+> **A fast, lightweight, and customizable terminal file manager carved in Rust.**
 
 </div>
 <div align="center">
@@ -29,33 +29,19 @@
 </div>
 
 - **Rich File Actions:** Move, filter, copy, rename, tabs, and more, all with the keyboard.
-- **Extremely Customizable:** Tweak keybindings, colors, and layout via TOML.
-- **Blazing Fast:** Instant navigation, even in huge directory trees.
+- **Customizable:** Tweak keybindings, colors, and layout via TOML.
+- **Fast:** Instant navigation, even in huge directory trees.
 - **Stateless:** Clean in-memory runtime without writing any cache, history or state files to disk.
+- **Command Runner:** Bind editors and custom commands with direct program execution (no shell), running in the terminal, in the background, or capturing ANSI output in overlays and toasts.
 - **Minimal Dependencies:** Only the essential crates; advanced features are opt-in.
 - **Cross-Platform:** Works on Linux, macOS, and Windows.
 - **Keyboard-Driven:** Every action accessible by keybindings. No mouse needed.
-- **Integrated Find (`fd` required):** Blazingly fast file search.
+- **Integrated Find (`fd` required):** Fast file search.
 
 <img src="https://github.com/user-attachments/assets/b02a5190-3e0a-45d3-ace1-f1d067f4bdaa" alt="runa" width="100%" style="max-width: 1274px; height: auto;" />
 <br></br>
 
 **runa - rn** is a feature-rich terminal file manager with a concurrent, multi-threaded architecture designed for speed and a minimal footprint.  
-It allows you to navigate directories, view file listings, and perform typical file manager actions.  
-
-<details>
-
-<summary><strong>What makes runa fast?</strong></summary>
-
-- **Multi-threaded engine:** Spawns 12 lightweight dedicated worker threads for I/O, preview, find, and file operations, so UI is never blocked.
-- **Essential-only Rust crates:** No external TUI frameworks or bloat.
-- **Direct terminal rendering:** Uses [ratatui](https://ratatui.rs/) & [crossterm](https://github.com/crossterm-rs/crossterm).
-- **Optional blazing-fast find:** Integrates with [fd](https://github.com/sharkdp/fd) for recursive fuzzy search.
-- **Blazingly lightweight:** The `rn` binary is compact (typically ~2.5-3 MB, depending on operating system and architecture).
-- **Minimal memory footprint**: Optimized for low RAM usage.
-
-</details>
-
 **runa** is very customizable, check out the [Configuration](https://runa-fm.github.io/runa/) docs for all the available options.
 
 > [!NOTE]

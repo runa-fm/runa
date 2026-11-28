@@ -2,7 +2,7 @@
 
 All the changes made to runa are documented here.
 
-## [0.15.8] - UNRELEASED
+## [0.16.0] - UNRELEASED
 
 ### Added
 - **Command outputs**: Commands now can output overlays and multi-line ANSI message widgets (`output = "overlay"` or `"message"`).

@@ -1092,7 +1092,7 @@ checksum = "d902046e6a28a1e4c3cab97258a0ce11e994903f01c2d97a9447a0b3df85f4f6"
 
 [[package]]
 name = "runa-fm"
-version = "0.15.8-alpha.2"
+version = "0.16.0-beta.1"
 dependencies = [
  "criterion",
  "crossbeam-channel",
