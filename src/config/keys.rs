@@ -84,6 +84,13 @@ impl<'de> Deserialize<'de> for Keys {
     }
 }
 
+impl Keys {
+    #[inline]
+    pub(crate) fn get(&self, key: &InputKeys) -> &[String] {
+        self.bindings.get(key).map(|v| v.0.as_ref()).unwrap_or(&[])
+    }
+}
+
 define_keys!(
     OpenFile => open_file = ["enter"],
     GoUp => go_up = ["k", "up"],

@@ -408,55 +408,6 @@ pub(crate) fn draw_keybind_help(frame: &mut Frame, app: &AppState, accent_style:
     let fmt_prefix =
         |leader: &str, list: &[String]| -> String { format!("{leader} + {}", fmt_keys(list)) };
 
-    let get_keys = |k: &InputKeys| -> &[String] {
-        match k {
-            InputKeys::GoUp => keys.go_up(),
-            InputKeys::GoDown => keys.go_down(),
-            InputKeys::GoParent => keys.go_parent(),
-            InputKeys::GoIntoDir => keys.go_into_dir(),
-            InputKeys::ToggleMarker => keys.toggle_marker(),
-            InputKeys::ClearMarkers => keys.clear_markers(),
-            InputKeys::ClearFilter => keys.clear_filter(),
-            InputKeys::ClearAll => keys.clear_all(),
-            InputKeys::SelectAll => keys.select_all(),
-            InputKeys::GoToBottom => keys.go_to_bottom(),
-            InputKeys::ScrollUp => keys.scroll_up(),
-            InputKeys::ScrollDown => keys.scroll_down(),
-            InputKeys::TabNew => keys.tab_new(),
-            InputKeys::TabClose => keys.tab_close(),
-            InputKeys::TabNext => keys.tab_next(),
-            InputKeys::TabPrev => keys.tab_prev(),
-            InputKeys::OpenFile => keys.open_file(),
-            InputKeys::Copy => keys.copy(),
-            InputKeys::Paste => keys.paste(),
-            InputKeys::Rename => keys.rename(),
-            InputKeys::Create => keys.create(),
-            InputKeys::CreateDirectory => keys.create_directory(),
-            InputKeys::Delete => keys.delete(),
-            InputKeys::AlternateDelete => keys.alternate_delete(),
-            InputKeys::Filter => keys.filter(),
-            InputKeys::Find => keys.find(),
-            InputKeys::MoveFile => keys.move_file(),
-            InputKeys::ShowInfo => keys.show_info(),
-            InputKeys::ClearClipboard => keys.clear_clipboard(),
-            InputKeys::PrefixGoTo => keys.prefix_go_to(),
-            InputKeys::GoToTop => keys.go_to_top(),
-            InputKeys::GoToHome => keys.go_to_home(),
-            InputKeys::GoToPath => keys.go_to_path(),
-            InputKeys::Sort => keys.sort(),
-            InputKeys::SortByName => keys.sort_by_name(),
-            InputKeys::SortByNatural => keys.sort_by_natural(),
-            InputKeys::SortByExtension => keys.sort_by_extension(),
-            InputKeys::SortBySize => keys.sort_by_size(),
-            InputKeys::SortByModified => keys.sort_by_modified(),
-            InputKeys::SortByCreated => keys.sort_by_created(),
-            InputKeys::SortByAccessed => keys.sort_by_accessed(),
-            InputKeys::Quit => keys.quit(),
-            InputKeys::KeybindHelp => keys.keybind_help(),
-            InputKeys::Reload => keys.reload(),
-        }
-    };
-
     let sections: Vec<(&str, Vec<HelpRow>)> = HELP_DATA
         .iter()
         .map(|section| {
@@ -466,12 +417,12 @@ pub(crate) fn draw_keybind_help(frame: &mut Frame, app: &AppState, accent_style:
                 .map(|entry| {
                     let key_text = match section.name {
                         "Go To" if entry.key != InputKeys::PrefixGoTo => {
-                            fmt_prefix(go_leader, get_keys(&entry.key))
+                            fmt_prefix(go_leader, keys.get(&entry.key))
                         }
                         "Sort" if entry.key != InputKeys::Sort => {
-                            fmt_prefix(sort_leader, get_keys(&entry.key))
+                            fmt_prefix(sort_leader, keys.get(&entry.key))
                         }
-                        _ => fmt_keys(get_keys(&entry.key)),
+                        _ => fmt_keys(keys.get(&entry.key)),
                     };
                     (key_text, entry.desc)
                 })

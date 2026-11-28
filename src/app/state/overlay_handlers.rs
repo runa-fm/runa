@@ -89,9 +89,7 @@ impl AppState {
     ) {
         self.notification_time = Some(Instant::now() + duration);
 
-        if self.overlays().is_top(OverlayKind::Message) {
-            self.overlays_mut().pop();
-        }
+        self.overlays_mut().remove_kind(OverlayKind::Message);
 
         self.overlays_mut().push(Overlay::Message {
             text: text.into(),
