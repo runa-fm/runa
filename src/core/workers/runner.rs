@@ -63,7 +63,7 @@ pub(super) fn start(cmd_rx: Receiver<RunnerCommand>, res_tx: Sender<WorkerRespon
                         .into_owned();
 
                     match spawn(&program, &args, dir.as_deref(), mode) {
-                        Ok(child) => {
+                        Ok(proc) => {
                             let cancel = match mode {
                                 CommandMode::Overlay { id, .. } => {
                                     let (cancel_tx, cancel_rx) = bounded(0);
@@ -81,7 +81,7 @@ pub(super) fn start(cmd_rx: Receiver<RunnerCommand>, res_tx: Sender<WorkerRespon
                                 CommandMode::Background { .. } | CommandMode::Message => None,
                             };
                             let res_tx = res_tx.clone();
-                            thread::spawn(move || wait_for(child, &name, mode, cancel, &res_tx));
+                            thread::spawn(move || wait_for(proc, &name, mode, cancel, &res_tx));
                         }
                         Err(e) => send_spawn_error(&name, e, mode, &res_tx),
                     }
@@ -161,7 +161,36 @@ fn spawn(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
+    #[cfg(unix)]
+    if matches!(mode, CommandMode::Overlay { .. }) {
+        use std::os::unix::process::CommandExt;
+        command.process_group(0);
+    }
+
     command.spawn()
+}
+
+fn cancel_tree(proc: &mut Child) {
+    #[cfg(unix)]
+    {
+        use rustix::process::{Pid, Signal, kill_process_group};
+        let _ = kill_process_group(Pid::from_child(proc), Signal::KILL);
+    }
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = Command::new("taskkill")
+            .args(["/T", "/F", "/PID", &proc.id().to_string()])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+
+    let _ = proc.kill();
+    let _ = proc.wait();
 }
 
 /// Read up to limit bytes and drains the rest.
@@ -203,13 +232,13 @@ fn collect_message_lines(primary: &[u8], fallback: &[u8], truncated: bool) -> Op
     Some(kept.join("\n"))
 }
 
-fn capture_streams(child: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
-    let stderr_handle = child
+fn capture_streams(proc: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
+    let stderr_handle = proc
         .stderr
         .take()
         .map(|stderr| thread::spawn(move || read_capped(stderr, limit)));
 
-    let (stdout_buf, stdout_trunc) = child
+    let (stdout_buf, stdout_trunc) = proc
         .stdout
         .take()
         .map(|stdout| read_capped(stdout, limit))
@@ -223,18 +252,18 @@ fn capture_streams(child: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
 }
 
 fn capture_streams_cancellable(
-    child: &mut Child,
+    proc: &mut Child,
     limit: u64,
     cancel: &Receiver<()>,
 ) -> Option<(Vec<u8>, Vec<u8>, bool)> {
-    let out_rx = child.stdout.take().map(|stdout| {
+    let out_rx = proc.stdout.take().map(|stdout| {
         let (tx, rx) = bounded(1);
         thread::spawn(move || {
             let _ = tx.send(read_capped(stdout, limit));
         });
         rx
     });
-    let err_rx = child.stderr.take().map(|stderr| {
+    let err_rx = proc.stderr.take().map(|stderr| {
         let (tx, rx) = bounded(1);
         thread::spawn(move || {
             let _ = tx.send(read_capped(stderr, limit));
@@ -258,8 +287,7 @@ fn capture_streams_cancellable(
 
         select! {
             recv(cancel) -> _ => {
-                let _ = child.kill();
-                let _ = child.wait();
+                cancel_tree(proc);
                 return None;
             }
             recv(out_sel) -> res => {
@@ -276,17 +304,16 @@ fn capture_streams_cancellable(
     Some((stdout_buf, stderr_buf, stdout_trunc || stderr_trunc))
 }
 
-fn wait_cancellable(child: &mut Child, cancel: &Receiver<()>) -> Option<io::Result<ExitStatus>> {
+fn wait_cancellable(proc: &mut Child, cancel: &Receiver<()>) -> Option<io::Result<ExitStatus>> {
     loop {
-        match child.try_wait() {
+        match proc.try_wait() {
             Ok(Some(status)) => return Some(Ok(status)),
             Ok(None) => {}
             Err(e) => return Some(Err(e)),
         }
         match cancel.recv_timeout(CANCEL_POLL) {
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                cancel_tree(proc);
                 return None;
             }
             Err(RecvTimeoutError::Timeout) => {}
@@ -318,7 +345,7 @@ fn build_overlay_lines(stdout: &[u8], stderr: &[u8]) -> Vec<String> {
 
 /// Waits for the command and reports a failure with the first line of its stderr.
 fn wait_for(
-    mut child: Child,
+    mut proc: Child,
     name: &str,
     mode: CommandMode,
     cancel: Option<(Receiver<()>, ActiveCommandGuard)>,
@@ -326,13 +353,13 @@ fn wait_for(
 ) {
     match mode {
         CommandMode::Background { check_status } => {
-            let (stderr, _) = child
+            let (stderr, _) = proc
                 .stderr
                 .take()
                 .map(|s| read_capped(s, MESSAGE_KEEP_BYTES))
                 .unwrap_or_default();
 
-            let message = match child.wait() {
+            let message = match proc.wait() {
                 Ok(_) if !check_status => return,
                 Ok(status) if status.success() => return,
                 Ok(status) => match first_non_empty_line(&stderr) {
@@ -345,9 +372,9 @@ fn wait_for(
             let _ = res_tx.send(WorkerResponse::Error(message));
         }
         CommandMode::Message => {
-            let (stdout, stderr, truncated) = capture_streams(&mut child, MESSAGE_KEEP_BYTES);
+            let (stdout, stderr, truncated) = capture_streams(&mut proc, MESSAGE_KEEP_BYTES);
 
-            let response = match child.wait() {
+            let response = match proc.wait() {
                 Ok(status) if status.success() => {
                     let msg = match collect_message_lines(&stdout, &stderr, truncated) {
                         Some(text) if text.contains('\n') => format!("{name}:\n{text}"),
@@ -371,17 +398,17 @@ fn wait_for(
         CommandMode::Overlay { id, tab_id } => {
             let (stdout, stderr, truncated, status) = if let Some((cancel_rx, _guard)) = cancel {
                 let Some((stdout, stderr, truncated)) =
-                    capture_streams_cancellable(&mut child, OVERLAY_MAX_BYTES, &cancel_rx)
+                    capture_streams_cancellable(&mut proc, OVERLAY_MAX_BYTES, &cancel_rx)
                 else {
                     return;
                 };
-                let Some(status) = wait_cancellable(&mut child, &cancel_rx) else {
+                let Some(status) = wait_cancellable(&mut proc, &cancel_rx) else {
                     return;
                 };
                 (stdout, stderr, truncated, status)
             } else {
-                let (stdout, stderr, truncated) = capture_streams(&mut child, OVERLAY_MAX_BYTES);
-                (stdout, stderr, truncated, child.wait())
+                let (stdout, stderr, truncated) = capture_streams(&mut proc, OVERLAY_MAX_BYTES);
+                (stdout, stderr, truncated, proc.wait())
             };
 
             let (lines, success, exit_code) = match status {

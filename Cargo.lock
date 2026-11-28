@@ -1105,6 +1105,7 @@ dependencies = [
  "phf",
  "rand",
  "ratatui",
+ "rustix",
  "serde",
  "stats_alloc",
  "tempfile",
