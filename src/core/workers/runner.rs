@@ -437,11 +437,20 @@ mod tests {
     use super::*;
 
     use std::path::PathBuf;
+    use std::time::Instant;
 
     use crossbeam_channel::unbounded;
     use tempfile::{TempDir, tempdir};
 
     const TIMEOUT: Duration = Duration::from_secs(5);
+
+    fn wait_for_file(path: &Path) {
+        let deadline = Instant::now() + TIMEOUT;
+        while !path.exists() {
+            assert!(Instant::now() < deadline, "timed out waiting for {path:?}");
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
 
     fn start_runner() -> (Sender<RunnerCommand>, Receiver<WorkerResponse>, TempDir) {
         let dir = tempdir().expect("temp dir is created");
@@ -656,6 +665,84 @@ mod tests {
 
         drop(cmd_tx);
         assert_nothing_sent(&res_rx);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overlay_mode_cancel_stops_descendants() {
+        let (cmd_tx, res_rx, dir) = start_runner();
+        let task = make_task(
+            "sh",
+            &[
+                "-c",
+                "sh -c 'touch ready && sleep 0.5 && touch leaked'; true",
+            ],
+            dir.path(),
+            CommandMode::Overlay {
+                id: 43,
+                tab_id: Some(0),
+            },
+        );
+        cmd_tx
+            .send(RunnerCommand::Run(task))
+            .expect("runner thread is running");
+
+        wait_for_file(&dir.path().join("ready"));
+        cmd_tx
+            .send(RunnerCommand::Cancel(43))
+            .expect("runner thread is running");
+
+        drop(cmd_tx);
+        assert_nothing_sent(&res_rx);
+
+        thread::sleep(Duration::from_millis(700));
+        assert!(
+            !dir.path().join("leaked").exists(),
+            "descendant process kept running after cancel"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn overlay_mode_cancel_stops_descendants() {
+        let (cmd_tx, res_rx, dir) = start_runner();
+        std::fs::write(
+            dir.path().join("inner.cmd"),
+            concat!(
+                "@echo off\r\n",
+                "echo ok > ready\r\n",
+                "ping -n 3 127.0.0.1 > nul\r\n",
+                "echo leaked > leaked\r\n",
+            ),
+        )
+        .expect("script is created");
+
+        let task = make_task(
+            "cmd",
+            &["/C", "cmd", "/C", ".\\inner.cmd"],
+            dir.path(),
+            CommandMode::Overlay {
+                id: 43,
+                tab_id: Some(0),
+            },
+        );
+        cmd_tx
+            .send(RunnerCommand::Run(task))
+            .expect("runner thread is running");
+
+        wait_for_file(&dir.path().join("ready"));
+        cmd_tx
+            .send(RunnerCommand::Cancel(43))
+            .expect("runner thread is running");
+
+        drop(cmd_tx);
+        assert_nothing_sent(&res_rx);
+
+        thread::sleep(Duration::from_millis(2500));
+        assert!(
+            !dir.path().join("leaked").exists(),
+            "descendant process kept running after cancel"
+        );
     }
 
     #[test]
