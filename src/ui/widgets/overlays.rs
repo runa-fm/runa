@@ -116,6 +116,7 @@ pub(crate) fn draw_prefix_help_overlay(frame: &mut Frame, app: &AppState, accent
     let go_to_top_keys = keys.go_to_top();
     let go_to_home_keys = keys.go_to_home();
     let go_to_path_keys = keys.go_to_path();
+    let go_to_trash_keys = keys.go_to_trash();
 
     let is_sort_prefix = app.actions().prefix_recognizer().is_sort_state();
     if is_sort_prefix {
@@ -189,6 +190,9 @@ pub(crate) fn draw_prefix_help_overlay(frame: &mut Frame, app: &AppState, accent
     }
     if let Some(k) = go_to_path_keys.first() {
         go_to_prefixes.push((k.clone(), "Go to path"));
+    }
+    if let Some(k) = go_to_trash_keys.first() {
+        go_to_prefixes.push((k.clone(), "Go to trash"));
     }
 
     let mut spans = Vec::with_capacity(4 * go_to_prefixes.len() + 2);
@@ -336,6 +340,7 @@ const HELP_DATA: &[HelpSection] = &[
             HelpEntry { key: InputKeys::GoToTop, desc: "Go to top" },
             HelpEntry { key: InputKeys::GoToHome, desc: "Go to home" },
             HelpEntry { key: InputKeys::GoToPath, desc: "Go to path" },
+            HelpEntry { key: InputKeys::GoToTrash, desc: "Go to trash" },
         ],
     },
     HelpSection {

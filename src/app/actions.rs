@@ -40,6 +40,9 @@ pub(crate) enum InputMode {
     ConfirmDelete {
         is_trash: bool,
     },
+    ConfirmTrash {
+        empty: bool,
+    },
     ConfirmOverwrite {
         is_dir: bool,
         old: Option<Arc<PathBuf>>,

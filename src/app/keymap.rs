@@ -32,6 +32,7 @@ pub(crate) enum NavAction {
     GoToBottom,
     GoToPath,
     GoToHome,
+    GoToTrash,
     ToggleMarker,
     ClearMarker,
     ClearFilter,
@@ -181,9 +182,10 @@ impl Keymap {
         bind!(keys.reload(),            Action::System(S::Reload));
 
         // Prefix actions
-        bind_prefix!(keys.go_to_top(),  Action::Nav(N::GoToTop),  PrefixCommand::Nav(N::GoToTop));
-        bind_prefix!(keys.go_to_home(), Action::Nav(N::GoToHome), PrefixCommand::Nav(N::GoToHome));
-        bind_prefix!(keys.go_to_path(), Action::Nav(N::GoToPath), PrefixCommand::Nav(N::GoToPath));
+        bind_prefix!(keys.go_to_top(),   Action::Nav(N::GoToTop),   PrefixCommand::Nav(N::GoToTop));
+        bind_prefix!(keys.go_to_home(),  Action::Nav(N::GoToHome),  PrefixCommand::Nav(N::GoToHome));
+        bind_prefix!(keys.go_to_path(),  Action::Nav(N::GoToPath),  PrefixCommand::Nav(N::GoToPath));
+        bind_prefix!(keys.go_to_trash(), Action::Nav(N::GoToTrash), PrefixCommand::Nav(N::GoToTrash));
 
         bind_sort!(keys.sort_by_name(),         SortMode::Name);
         bind_sort!(keys.sort_by_natural(),      SortMode::Natural);

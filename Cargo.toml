@@ -67,7 +67,7 @@ trash = { version = "5.4.0", default-features = false }
 notify = { version = "9.0.0", default-features = false }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
-trash = { version = "5.4.0", default-features = false, features = ["freedesktop"] }
+trash = { version = "5.4.0", default-features = false, features = ["freedesktop", "jiff"] }
 
 [target.'cfg(unix)'.dependencies]
 uzers = { version = "0.12.2", default-features = false }

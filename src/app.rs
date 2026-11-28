@@ -11,6 +11,7 @@ mod parent_pane;
 mod preview_pane;
 mod state;
 pub(crate) mod tab;
+mod trash;
 
 pub(crate) use clipboard::Clipboard;
 pub(crate) use container::AppContainer;
@@ -19,3 +20,4 @@ pub(crate) use parent_pane::ParentState;
 pub(crate) use preview_pane::{PreviewData, PreviewState};
 pub(crate) use state::{AppState, KeypressResult, LayoutMetrics};
 pub(crate) use tab::MAX_TABS;
+pub(crate) use trash::TrashState;

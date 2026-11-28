@@ -238,6 +238,11 @@ pub(crate) enum WorkerResponse {
         truncated: bool,
         tab_id: Option<usize>,
     },
+    TrashLoaded {
+        items: Arc<[TrashEntry]>,
+        supported: bool,
+        tab_id: Option<usize>,
+    },
     Message(String),
     ConfigChanged,
     DirsChanged {
@@ -261,6 +266,7 @@ impl WorkerResponse {
             WorkerResponse::FindResults { tab_id, .. } => *tab_id,
             WorkerResponse::FileMetadataLoaded { tab_id, .. } => *tab_id,
             WorkerResponse::CommandOutput { tab_id, .. } => *tab_id,
+            WorkerResponse::TrashLoaded { tab_id, .. } => *tab_id,
             _ => None,
         }
     }

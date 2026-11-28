@@ -80,6 +80,10 @@ fn open_startup_tab(config: &Arc<Config>, path: &Path) -> io::Result<AppState> {
         return AppState::new(Arc::clone(config));
     }
 
+    if path == Path::new("trash") || path == Path::new("Trash") {
+        return AppState::from_trash(Arc::clone(config));
+    }
+
     let target = resolve_initial_dir(path);
     validate_path(&target)
         .map_err(|e| io::Error::new(e.kind(), format!("{e}: '{}'", path.display())))?;

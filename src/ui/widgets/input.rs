@@ -100,6 +100,58 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
                 );
             }
 
+            InputMode::ConfirmTrash { empty } => {
+                let confirm_size = widget.confirm_size();
+                let dialog_area = widgets::dialog_area(frame.area(), confirm_size, position);
+                let visible_width = dialog_area.width.saturating_sub(2) as usize;
+
+                let mut dialog_lines = vec![
+                    Line::raw(prompt),
+                    Line::from(vec![Span::styled(
+                        "─".repeat(visible_width),
+                        widget.border_style_or(Style::default().fg(Color::Red)),
+                    )]),
+                ];
+
+                if !empty && let Some(trash) = app.trash() {
+                    let targets = trash.target_names();
+                    if !targets.is_empty() {
+                        dialog_lines.push(Line::raw(format!(
+                            "Items to permanently delete ({}):",
+                            targets.len()
+                        )));
+                        for name in targets {
+                            dialog_lines.push(Line::raw(format!("  - {name}")));
+                        }
+                    }
+                }
+
+                let title = if *empty {
+                    "Empty Trash"
+                } else {
+                    "Confirm Delete"
+                };
+
+                widgets::draw_dialog(
+                    frame,
+                    DialogLayout {
+                        area: frame.area(),
+                        position,
+                        size: confirm_size,
+                    },
+                    border_type,
+                    &widgets::get_dialog_style(
+                        app,
+                        Style::default().fg(Color::Red),
+                        title,
+                        Some(Style::default().fg(Color::Red)),
+                    ),
+                    Text::from(dialog_lines),
+                    Some(Alignment::Left),
+                    Some(app.actions().scroll()),
+                );
+            }
+
             InputMode::MoveFile => {
                 let targets_set = app.nav().get_action_targets();
                 let mut action_targets: Vec<_> = targets_set.iter().collect();

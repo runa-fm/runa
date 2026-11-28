@@ -16,14 +16,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
 
-use crossterm::event::KeyEvent;
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::text::Span;
 
 use crate::app::{
-    Clipboard, NavState, ParentState, PreviewData, PreviewState,
+    Clipboard, NavState, ParentState, PreviewData, PreviewState, TrashState,
     actions::{ActionContext, ActionMode, InputMode},
     file_info::FileInfoState,
-    keymap::{Action, Keymap, TabAction},
+    keymap::{Action, FileAction, Keymap, NavAction, TabAction},
     overlay_stack::{OverlayKind, OverlayStack},
 };
 use crate::config::{Config, commands, display::PreviewMethod};
@@ -32,12 +32,12 @@ use crate::core::{
     metadata::{FileMetadataCache, MetadataNeeds},
     preview::PreviewMode,
     workers::{
-        DirRequest, FindTask, LoadDirTask, MetadataTask, PreviewTask, SortDirTask, WorkerResponse,
-        Workers,
+        DirRequest, FileOperation, FindTask, LoadDirTask, MetadataTask, PreviewTask, SortDirTask,
+        TrashOperation, WorkerResponse, Workers,
     },
 };
 use crate::utils::{
-    ansi,
+    ansi, os,
     timings::{self, Throttler},
 };
 
@@ -91,6 +91,7 @@ pub(crate) struct AppState {
     preview: PreviewState,
     parent: ParentState,
     actions: ActionContext,
+    trash: Option<TrashState>,
 
     file_info: FileInfoState,
 
@@ -120,8 +121,18 @@ impl AppState {
         Ok(app)
     }
 
+    pub(crate) fn from_trash(config: Arc<Config>) -> io::Result<Self> {
+        let fallback = os::get_home()
+            .cloned()
+            .or_else(|| env::current_dir().ok())
+            .ok_or_else(|| io::Error::other("could not determine fallback directory"))?;
+        let mut app = Self::from_dir(config, &fallback)?;
+        app.trash = Some(TrashState::new_loading());
+        Ok(app)
+    }
+
     pub(crate) fn from_dir(config: Arc<Config>, initial_path: &Path) -> io::Result<Self> {
-        let current_dir = if initial_path.exists() && initial_path.is_dir() {
+        let current_dir = if initial_path.is_dir() {
             initial_path.to_path_buf()
         } else {
             env::current_dir()?
@@ -135,6 +146,7 @@ impl AppState {
             actions: ActionContext::default(),
             preview: PreviewState::default(),
             parent: ParentState::default(),
+            trash: None,
             file_info: FileInfoState::new(),
             is_loading: false,
             notification_time: None,
@@ -156,9 +168,23 @@ impl AppState {
 
     /// Initializes the AppState by requesting the initial directory load and parent content.
     pub(crate) fn initialize(&mut self, workers: &Workers, focus: Option<OsString>) {
+        if self.trash.is_some() {
+            self.request_trash_list(workers);
+            return;
+        }
         self.is_loading = true;
         self.request_dir_load(workers, focus);
         self.request_parent_content(workers);
+    }
+
+    #[inline]
+    pub(crate) fn is_trash(&self) -> bool {
+        self.trash.is_some()
+    }
+
+    #[inline]
+    pub(crate) fn trash(&self) -> Option<&TrashState> {
+        self.trash.as_ref()
     }
 
     crate::getters! {
@@ -222,6 +248,10 @@ impl AppState {
     /// - parent
     /// - preview, only when it shows a directory
     pub(crate) fn shown_dirs(&self) -> [Option<&Path>; 3] {
+        if self.is_trash() {
+            return [None, None, None];
+        }
+
         let current = self.nav.current_dir();
         let preview = self
             .preview
@@ -501,6 +531,16 @@ impl AppState {
                 }
             },
 
+            WorkerResponse::TrashLoaded {
+                items,
+                supported,
+                tab_id: _,
+            } => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.update(items, supported);
+                }
+            }
+
             WorkerResponse::Message(msg) => {
                 self.push_overlay_message(msg, timings::message::DEFAULT);
             }
@@ -550,6 +590,10 @@ impl AppState {
 
         if let Some(res) = self.handle_prefix_dispatch(workers, &key) {
             return res;
+        }
+
+        if self.is_trash() {
+            return self.handle_trash_keypress(key, workers);
         }
 
         if let Some(action) = self.keymap.lookup(key) {
@@ -711,6 +755,16 @@ impl AppState {
             self.file_info.touch();
             self.file_info.set_pending(request_id, path);
         }
+    }
+
+    pub(crate) fn request_trash_list(&mut self, workers: &Workers) {
+        if let Some(trash) = self.trash.as_mut() {
+            trash.set_loading(true);
+        }
+        let _ = workers.fileop_tx().send(FileOperation::Trash {
+            op: TrashOperation::List,
+            tab_id: self.tab_id(),
+        });
     }
 
     pub(crate) fn dir_list_options(&self) -> DirListOptions {
@@ -930,6 +984,144 @@ impl AppState {
             owner: self.config.display().info().owner(),
             #[cfg(unix)]
             group: self.config.display().info().group(),
+        }
+    }
+
+    pub(super) fn enter_trash(&mut self, workers: &Workers) {
+        self.preview.clear();
+        self.trash = Some(TrashState::new_loading());
+        self.request_trash_list(workers);
+    }
+
+    fn exit_trash(&mut self, workers: &Workers) {
+        self.trash = None;
+        self.preview.clear();
+        if self.nav.request_id() == 0 {
+            self.initialize(workers, None);
+        } else {
+            self.request_dir_reload(workers);
+            self.request_parent_content(workers);
+            self.request_preview_force(workers);
+            self.update_file_info_cache(workers);
+        }
+    }
+
+    pub(super) fn confirm_trash(&mut self, workers: &Workers, empty: bool) {
+        let Some(trash) = self.trash.as_mut() else {
+            return;
+        };
+
+        let op = if empty {
+            TrashOperation::Empty
+        } else {
+            let items = trash.target_items();
+            if items.is_empty() {
+                return;
+            }
+            TrashOperation::Purge(items)
+        };
+
+        trash.clear_markers();
+        trash.set_loading(true);
+        let _ = workers.fileop_tx().send(FileOperation::Trash {
+            op,
+            tab_id: self.tab_id(),
+        });
+    }
+
+    fn handle_trash_keypress(&mut self, key: KeyEvent, workers: &Workers) -> KeypressResult {
+        if let KeyCode::Char('E') = key.code {
+            if let Some(trash) = self.trash.as_ref()
+                && !trash.items().is_empty()
+            {
+                let count = trash.items().len();
+                let label = if count == 1 { "item" } else { "items" };
+                self.enter_input_mode(
+                    InputMode::ConfirmTrash { empty: true },
+                    format!("Empty trash ({count} {label})? (y/n)"),
+                    None,
+                );
+            }
+            return KeypressResult::Consumed;
+        }
+
+        if let KeyCode::Char('r') = key.code {
+            if let Some(trash) = self.trash.as_mut() {
+                let items = trash.target_items();
+                if !items.is_empty() {
+                    trash.clear_markers();
+                    trash.set_loading(true);
+                    let _ = workers.fileop_tx().send(FileOperation::Trash {
+                        op: TrashOperation::Restore(items),
+                        tab_id: self.tab_id(),
+                    });
+                }
+            }
+            return KeypressResult::Consumed;
+        }
+
+        let Some(action) = self.keymap.lookup(key) else {
+            return KeypressResult::Consumed;
+        };
+
+        match action {
+            Action::System(sys_act) => self.handle_sys_action(sys_act),
+            Action::Tab(tab_act) => KeypressResult::Tab(tab_act),
+            Action::Nav(NavAction::GoUp) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.move_up();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::GoDown) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.move_down();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::GoToBottom) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.last();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::GoParent) => {
+                self.exit_trash(workers);
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::ToggleMarker) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.toggle_marker();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::SelectAll) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.select_all();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::ClearMarker | NavAction::ClearAll) => {
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.clear_markers();
+                }
+                KeypressResult::Consumed
+            }
+            Action::File(FileAction::Delete | FileAction::AlternateDelete) => {
+                if let Some(trash) = self.trash.as_ref()
+                    && !trash.target_items().is_empty()
+                {
+                    let count = trash.target_items().len();
+                    let label = if count == 1 { "item" } else { "items" };
+                    self.enter_input_mode(
+                        InputMode::ConfirmTrash { empty: false },
+                        format!("Permanently delete {count} {label}? (y/n)"),
+                        None,
+                    );
+                }
+                KeypressResult::Consumed
+            }
+            _ => KeypressResult::Consumed,
         }
     }
 }

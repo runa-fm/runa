@@ -103,12 +103,16 @@ impl TabManager {
                 };
 
                 let name = if tab_theme.uses_name() {
-                    let cwd = tab.nav().current_dir();
-                    let shortened = path::shorten_home_path(cwd);
-                    Path::new(&shortened)
-                        .file_name()
-                        .map(|os_str| os_str.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| cwd.to_string_lossy().into_owned())
+                    if tab.is_trash() {
+                        "Trash".to_string()
+                    } else {
+                        let cwd = tab.nav().current_dir();
+                        let shortened = path::shorten_home_path(cwd);
+                        Path::new(&shortened)
+                            .file_name()
+                            .map(|os_str| os_str.to_string_lossy().into_owned())
+                            .unwrap_or_else(|| cwd.to_string_lossy().into_owned())
+                    }
                 } else {
                     String::new()
                 };
@@ -293,7 +297,9 @@ pub(crate) fn handle_sort_action(container: &mut AppContainer, config: SortConfi
 }
 
 fn activate_tab(tab: &mut AppState, workers: &Workers) {
-    if tab.nav().request_id() == 0 {
+    if tab.is_trash() {
+        tab.request_trash_list(workers);
+    } else if tab.nav().request_id() == 0 {
         tab.initialize(workers, None);
     } else {
         tab.request_dir_reload(workers);

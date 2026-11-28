@@ -119,6 +119,7 @@ define_keys!(
     GoToTop => go_to_top = ["g"],
     GoToHome => go_to_home = ["h"],
     GoToPath => go_to_path = ["p"],
+    GoToTrash => go_to_trash = ["t"],
     GoToBottom => go_to_bottom = ["G"],
     TabNew => tab_new = ["<c-t>"],
     TabClose => tab_close = ["<c-w>"],

@@ -139,12 +139,13 @@ pub(crate) fn render(
 
         fill_pane(frame, chunks[pane_idx], theme_cfg.bg_style());
 
+        let main_title = if app.is_trash() { "Trash" } else { "Files" };
         panes::draw_main(
             frame,
             app,
             PaneContext::new(
                 chunks[pane_idx],
-                widgets::get_pane_block("Files", app),
+                widgets::get_pane_block(main_title, app),
                 border_type,
                 theme_cfg,
                 display_cfg,
@@ -303,7 +304,11 @@ fn render_header(frame: &mut Frame, app: &AppState, area: Rect) {
     let cfg = app.config();
     let display_cfg = cfg.display();
     let theme_cfg = cfg.theme();
-    let path_str = app.nav().display_path();
+    let path_str = if app.is_trash() {
+        "trash://"
+    } else {
+        app.nav().display_path()
+    };
     let border_type = display_cfg.border_type();
 
     if display_cfg.is_unified() {

@@ -54,6 +54,7 @@ pub(crate) fn draw_status_bar(
     let mut left_spans = Vec::with_capacity(12);
 
     if position == StatusPosition::Footer
+        && !app.is_trash()
         && display_cfg.info().status_bar()
         && let Some(file_meta) = app.selected_file_info()
     {
@@ -177,25 +178,24 @@ pub(crate) fn draw_status_bar(
     }
 
     if status_cfg.markers() == position {
-        let markers = app.nav().markers();
-        let marker_count = markers.len();
-        if marker_count > 0 {
-            let is_redundant = if let Some(clipboard_set) = clipboard.entries() {
-                if clipboard_set.len() != marker_count {
-                    false
-                } else {
-                    markers.iter().all(|path| clipboard_set.contains(path))
-                }
-            } else {
-                false
-            };
+        let marker_count = if let Some(trash) = app.trash() {
+            trash.markers().len()
+        } else {
+            let markers = app.nav().markers();
+            let count = markers.len();
+            let is_redundant = count > 0
+                && clipboard.entries().is_some_and(|clipboard_set| {
+                    clipboard_set.len() == count
+                        && markers.iter().all(|path| clipboard_set.contains(path))
+                });
+            if is_redundant { 0 } else { count }
+        };
 
-            if !is_redundant {
-                add_sep(&mut spans);
-                let style = patch_style(marker_theme.style_or_theme());
-                spans.push(Span::styled(marker_count.to_string(), style));
-                spans.push(Span::styled(" marked", style));
-            }
+        if marker_count > 0 {
+            add_sep(&mut spans);
+            let style = patch_style(marker_theme.style_or_theme());
+            spans.push(Span::styled(marker_count.to_string(), style));
+            spans.push(Span::styled(" marked", style));
         }
     }
 
@@ -213,13 +213,17 @@ pub(crate) fn draw_status_bar(
     }
 
     if status_cfg.entry_count() == position {
-        let total = app.nav().shown_entries_len();
+        let (total, selected) = if let Some(trash) = app.trash() {
+            let len = trash.items().len();
+            (len, (len > 0).then_some(trash.selected()))
+        } else {
+            (app.nav().shown_entries_len(), app.visible_selected())
+        };
         add_sep(&mut spans);
         let count_str = if total == 0 {
             "0/0".to_string()
         } else {
-            let idx_text = app
-                .visible_selected()
+            let idx_text = selected
                 .map(|idx| (idx + 1).to_string())
                 .unwrap_or_else(|| "0".to_string());
             format!("{}/{}", idx_text, total)

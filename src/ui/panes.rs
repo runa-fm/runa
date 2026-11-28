@@ -21,11 +21,11 @@ use ratatui::{
 };
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
-use crate::app::{AppState, Clipboard, PreviewData};
+use crate::app::{AppState, Clipboard, PreviewData, TrashState};
 use crate::config::{Display, Theme};
 use crate::core::{FileEntry, preview::TreeRow};
 use crate::ui::icons;
-use crate::utils::text::StrBuffer;
+use crate::utils::{path, text::StrBuffer};
 
 const MAX_RIGHT_COLUMN_WIDTH: u16 = 24;
 const MIN_LEFT_WIDTH: u16 = 12;
@@ -180,6 +180,11 @@ pub(super) fn draw_main(
     context: PaneContext,
     clipboard: &Clipboard,
 ) {
+    if let Some(trash) = app.trash() {
+        draw_trash_main(frame, app, trash, context);
+        return;
+    }
+
     let selected_idx = app.visible_selected();
     let current_dir = app.nav().current_dir();
 
@@ -267,6 +272,11 @@ pub(super) fn draw_preview(
     context: PaneContext,
     markers: &PaneMarkers,
 ) {
+    if let Some(trash) = app.trash() {
+        draw_trash_preview(frame, app, trash, context);
+        return;
+    }
+
     let preview = app.preview().data();
     let selected_idx = Some(app.preview().selected_idx());
 
@@ -409,6 +419,19 @@ pub(super) fn draw_parent(
     context: PaneContext,
     markers: &PaneMarkers,
 ) {
+    if app.is_trash() {
+        frame.render_widget(
+            Paragraph::new("").block(
+                context
+                    .block
+                    .border_style(context.accent_style)
+                    .border_type(context.border_type),
+            ),
+            context.area,
+        );
+        return;
+    }
+
     let entries = app.parent().entries();
     let selected_idx = app.parent().selected_idx();
     if entries.is_empty() {
@@ -881,4 +904,179 @@ fn right_col_for(
         text: right_col_at(sort_column, idx),
         width: layout.width,
     }
+}
+
+fn draw_trash_main(frame: &mut Frame, app: &AppState, trash: &TrashState, context: PaneContext) {
+    let empty_label = if !trash.supported() {
+        Some("[Trash view is not supported on this OS]")
+    } else if trash.items().is_empty() {
+        Some(if trash.loading() {
+            ""
+        } else {
+            "[Trash is empty]"
+        })
+    } else {
+        None
+    };
+
+    if let Some(label) = empty_label {
+        let line = Line::from(vec![
+            Span::raw(context.padding_str),
+            Span::styled(label, context.styles.item),
+        ]);
+        frame.render_widget(
+            Paragraph::new(line).block(
+                context
+                    .block
+                    .border_style(context.accent_style)
+                    .border_type(context.border_type),
+            ),
+            context.area,
+        );
+        return;
+    }
+
+    let selected = trash.selected();
+    let use_icons = app.config().display().icons();
+    let marker_theme = context.theme.marker();
+    let marker_icon = marker_theme.icon();
+    let marker_style = marker_theme.style_or_theme();
+    let has_markers = !trash.markers().is_empty();
+
+    let items: Vec<ListItem> = trash
+        .items()
+        .iter()
+        .enumerate()
+        .map(|(idx, entry)| {
+            let is_selected = idx == selected;
+            let is_dir = entry.is_dir();
+            let style = context.styles.get_style(is_dir, is_selected);
+            let mut spans = Vec::with_capacity(5);
+
+            spans.push(Span::raw(context.padding_str));
+
+            if has_markers {
+                if trash.is_marked(&entry.item.id) {
+                    spans.push(Span::styled(marker_icon, marker_style));
+                } else {
+                    spans.push(Span::raw(" ".repeat(marker_icon.width())));
+                }
+            }
+
+            if use_icons {
+                let ext = Path::new(&entry.name_str)
+                    .extension()
+                    .and_then(|e| e.to_str());
+                let (icon, color) = icons::name_icon(&entry.name_str, is_dir, ext, context.theme);
+                let icon_style = match color {
+                    Some(c) if !is_selected => style.fg(c),
+                    _ => style,
+                };
+                spans.push(Span::styled(format!("{icon} "), icon_style));
+            }
+
+            spans.push(Span::styled(entry.name_str.as_str(), style));
+            ListItem::new(Line::from(spans)).style(if is_selected {
+                context.styles.selection
+            } else {
+                Style::default()
+            })
+        })
+        .collect();
+
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(
+        List::new(items)
+            .block(
+                context
+                    .block
+                    .border_style(context.accent_style)
+                    .border_type(context.border_type),
+            )
+            .highlight_style(Style::default())
+            .highlight_symbol(context.highlight_symbol)
+            .scroll_padding(app.config().display().scroll_padding()),
+        context.area,
+        &mut state,
+    );
+}
+
+fn draw_trash_preview(frame: &mut Frame, app: &AppState, trash: &TrashState, context: PaneContext) {
+    let block = context
+        .block
+        .border_style(context.accent_style)
+        .border_type(context.border_type);
+
+    let label_style = context.theme.widget().label_style_or_theme();
+    let value_style = context.theme.widget().value_style_or_theme();
+    let dim_style = Style::default().add_modifier(Modifier::DIM);
+
+    let Some(entry) = trash.selected_entry() else {
+        let lines = vec![
+            Line::raw(""),
+            Line::from(vec![
+                Span::raw(context.padding_str),
+                Span::styled("[h] Back", dim_style),
+            ]),
+        ];
+        frame.render_widget(Paragraph::new(Text::from(lines)).block(block), context.area);
+        return;
+    };
+
+    let mut lines: Vec<Line> = Vec::with_capacity(8);
+    let mut add_row = |label: &str, value: String| {
+        lines.push(Line::from(vec![
+            Span::raw(context.padding_str),
+            Span::styled(format!("{label:<10}"), label_style),
+            Span::styled(value, value_style),
+        ]));
+    };
+
+    add_row("Name:", entry.name_str.clone());
+    add_row(
+        "Type:",
+        if entry.is_dir() {
+            "Directory".to_string()
+        } else {
+            "File".to_string()
+        },
+    );
+    add_row(
+        "Original:",
+        path::shorten_home_path(&entry.item.original_parent),
+    );
+
+    if entry.item.time_deleted > 0
+        && let Ok(ts) = jiff::Timestamp::from_second(entry.item.time_deleted)
+    {
+        let date_fmt = app.config().display().info().date_format();
+        let zoned = ts.to_zoned_datetime(jiff::tz::TimeZone::system());
+        let formatted = jiff::fmt::strtime::format(date_fmt, &zoned)
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| {
+                jiff::fmt::strtime::format("%Y-%m-%d %H:%M", &zoned)
+                    .unwrap_or_else(|_| "-".to_string())
+            });
+        add_row("Deleted:", formatted);
+    }
+
+    if let Some(size) = entry.size {
+        let size_str = match size {
+            trash::TrashItemSize::Bytes(b) => humansize::format_size(b, humansize::DECIMAL),
+            trash::TrashItemSize::Entries(n) => {
+                let label = if n == 1 { "item" } else { "items" };
+                format!("{n} {label}")
+            }
+        };
+        add_row("Size:", size_str);
+    }
+
+    lines.push(Line::raw(""));
+    lines.push(Line::from(vec![
+        Span::raw(context.padding_str),
+        Span::styled("[r] Restore  [d] Delete  [E] Empty  [h] Back", dim_style),
+    ]));
+
+    frame.render_widget(Paragraph::new(Text::from(lines)).block(block), context.area);
 }

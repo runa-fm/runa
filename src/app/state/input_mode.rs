@@ -67,6 +67,7 @@ impl AppState {
                     InputMode::Rename => self.rename_entry(workers),
                     InputMode::Filter => self.apply_filter(workers),
                     InputMode::ConfirmDelete { .. } => self.confirm_delete(workers),
+                    InputMode::ConfirmTrash { empty } => self.confirm_trash(workers, *empty),
                     InputMode::ConfirmOverwrite { .. } => self.confirm_overwrite(workers),
                     InputMode::Find => self.handle_find(workers),
                     InputMode::MoveFile => self.move_file(workers),
@@ -148,6 +149,13 @@ impl AppState {
             Char(c) => match mode {
                 InputMode::ConfirmDelete { .. } => {
                     self.process_confirm_char(workers, c, Self::confirm_delete);
+                    KeypressResult::Consumed
+                }
+                InputMode::ConfirmTrash { empty } => {
+                    let empty = *empty;
+                    self.process_confirm_char(workers, c, move |app, w| {
+                        app.confirm_trash(w, empty)
+                    });
                     KeypressResult::Consumed
                 }
                 InputMode::ConfirmOverwrite { .. } => {
@@ -242,8 +250,12 @@ impl AppState {
     ) -> Option<KeypressResult> {
         match prefix {
             PrefixCommand::Nav(NavAction::GoToTop) => {
-                self.handle_go_to_top(workers);
-                self.update_file_info_cache(workers);
+                if let Some(trash) = self.trash.as_mut() {
+                    trash.first();
+                } else {
+                    self.handle_go_to_top(workers);
+                    self.update_file_info_cache(workers);
+                }
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToHome) => {
@@ -252,6 +264,10 @@ impl AppState {
             }
             PrefixCommand::Nav(NavAction::GoToPath) => {
                 self.prompt_go_to_path();
+                Some(KeypressResult::Consumed)
+            }
+            PrefixCommand::Nav(NavAction::GoToTrash) => {
+                self.enter_trash(workers);
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Sort(sort_mode) => {

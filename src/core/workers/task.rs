@@ -89,6 +89,27 @@ pub(crate) struct CommandTask {
     pub(crate) mode: CommandMode,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct TrashEntry {
+    pub(crate) item: trash::TrashItem,
+    pub(crate) size: Option<trash::TrashItemSize>,
+    pub(crate) name_str: String,
+}
+
+impl TrashEntry {
+    #[inline]
+    pub(crate) fn is_dir(&self) -> bool {
+        matches!(self.size, Some(trash::TrashItemSize::Entries(_)))
+    }
+}
+
+pub(crate) enum TrashOperation {
+    List,
+    Restore(Vec<trash::TrashItem>),
+    Purge(Vec<trash::TrashItem>),
+    Empty,
+}
+
 /// Supported file system operations the worker can perform.
 pub(crate) enum FileOperation {
     Delete(Vec<PathBuf>, bool),
@@ -107,5 +128,9 @@ pub(crate) enum FileOperation {
         path: PathBuf,
         is_dir: bool,
         overwrite: bool,
+    },
+    Trash {
+        op: TrashOperation,
+        tab_id: Option<usize>,
     },
 }

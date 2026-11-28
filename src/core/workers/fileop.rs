@@ -14,7 +14,7 @@ use std::thread;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::core::workers::{FileOperation, WorkerResponse};
+use crate::core::workers::{FileOperation, TrashEntry, TrashOperation, WorkerResponse};
 use crate::utils::path;
 
 struct ActiveOpGuard(Arc<AtomicUsize>);
@@ -40,6 +40,11 @@ pub(super) fn start(
     thread::spawn(move || {
         while let Ok(op) = task_rx.recv() {
             let _guard = ActiveOpGuard::new(Arc::clone(&active_fileop));
+
+            if let FileOperation::Trash { op, tab_id } = op {
+                handle_trash_op(op, tab_id, &res_tx);
+                continue;
+            }
 
             let modified_dirs = collect_modified_dirs(&op);
             let mut focus_target: Option<OsString> = None;
@@ -265,6 +270,7 @@ pub(super) fn start(
                     }
                     op_result
                 }
+                FileOperation::Trash { .. } => unreachable!(),
             };
 
             match result {
@@ -313,6 +319,7 @@ fn collect_modified_dirs(op: &FileOperation) -> Vec<PathBuf> {
         FileOperation::Create { path, .. } => {
             add_parent(&mut dirs, path);
         }
+        FileOperation::Trash { .. } => {}
     }
 
     dirs.into_iter().collect()
@@ -500,6 +507,156 @@ pub(crate) fn rename_with_fallback(src: &Path, dst: &Path, is_dir: bool) -> io::
         }
         Err(e) => Err(e),
     }
+}
+
+#[cfg(any(
+    target_os = "windows",
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+))]
+fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<WorkerResponse>) {
+    match op {
+        TrashOperation::List => send_trash_list(res_tx, tab_id),
+        TrashOperation::Restore(items) => {
+            let count = items.len();
+            let modified_dirs: Vec<PathBuf> = items
+                .iter()
+                .map(|i| i.original_parent.clone())
+                .collect::<HashSet<_>>()
+                .into_iter()
+                .collect();
+
+            match trash::os_limited::restore_all(items) {
+                Ok(()) => {
+                    let label = if count == 1 { "item" } else { "items" };
+                    let _ =
+                        res_tx.send(WorkerResponse::Message(format!("Restored {count} {label}")));
+                    let _ = res_tx.send(WorkerResponse::OperationComplete {
+                        need_reload: true,
+                        focus: None,
+                        modified_dirs,
+                    });
+                }
+                Err(trash::Error::RestoreCollision { path, .. }) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!(
+                        "Restore failed: '{}' already exists",
+                        path.display()
+                    )));
+                }
+                Err(trash::Error::RestoreTwins { path, .. }) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!(
+                        "Restore failed: multiple items share '{}'",
+                        path.display()
+                    )));
+                }
+                Err(e) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!("Restore failed: {e}")));
+                }
+            }
+            send_trash_list(res_tx, tab_id);
+        }
+        TrashOperation::Purge(items) => {
+            let count = items.len();
+            match trash::os_limited::purge_all(items) {
+                Ok(()) => {
+                    let label = if count == 1 { "item" } else { "items" };
+                    let _ = res_tx.send(WorkerResponse::Message(format!(
+                        "Permanently deleted {count} {label}"
+                    )));
+                }
+                Err(e) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!("Delete failed: {e}")));
+                }
+            }
+            send_trash_list(res_tx, tab_id);
+        }
+        TrashOperation::Empty => {
+            match trash::os_limited::list().and_then(trash::os_limited::purge_all) {
+                Ok(()) => {
+                    let _ = res_tx.send(WorkerResponse::Message("Trash emptied".to_string()));
+                    let _ = res_tx.send(WorkerResponse::TrashLoaded {
+                        items: Arc::default(),
+                        supported: true,
+                        tab_id,
+                    });
+                }
+                Err(e) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!("Empty trash failed: {e}")));
+                    send_trash_list(res_tx, tab_id);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(any(
+    target_os = "windows",
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+))]
+fn send_trash_list(res_tx: &Sender<WorkerResponse>, tab_id: Option<usize>) {
+    match trash::os_limited::list() {
+        Ok(raw_items) => {
+            let mut entries: Vec<TrashEntry> = raw_items
+                .into_iter()
+                .map(|item| {
+                    let size = trash::os_limited::metadata(&item).ok().map(|m| m.size);
+                    let name_str = item.name.to_string_lossy().into_owned();
+                    TrashEntry {
+                        item,
+                        size,
+                        name_str,
+                    }
+                })
+                .collect();
+
+            entries.sort_by(|a, b| {
+                b.item
+                    .time_deleted
+                    .cmp(&a.item.time_deleted)
+                    .then_with(|| a.name_str.cmp(&b.name_str))
+            });
+
+            let _ = res_tx.send(WorkerResponse::TrashLoaded {
+                items: Arc::from(entries),
+                supported: true,
+                tab_id,
+            });
+        }
+        Err(e) => {
+            let _ = res_tx.send(WorkerResponse::Error(format!("Trash error: {e}")));
+        }
+    }
+}
+
+#[cfg(not(any(
+    target_os = "windows",
+    all(
+        unix,
+        not(target_os = "macos"),
+        not(target_os = "ios"),
+        not(target_os = "android")
+    )
+)))]
+fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<WorkerResponse>) {
+    if !matches!(op, TrashOperation::List) {
+        let _ = res_tx.send(WorkerResponse::Error(
+            "Trash management is not supported on this OS".to_string(),
+        ));
+    }
+    let _ = res_tx.send(WorkerResponse::TrashLoaded {
+        items: Arc::default(),
+        supported: false,
+        tab_id,
+    });
 }
 
 #[cfg(test)]

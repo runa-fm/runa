@@ -266,6 +266,9 @@ impl AppState {
     }
 
     fn navigate_to(&mut self, path: PathBuf, focus: Option<OsString>, workers: &Workers) {
+        if self.trash.take().is_some() {
+            self.preview.clear();
+        }
         self.nav.save_position();
         self.nav.set_path(path.clone());
 
