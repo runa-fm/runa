@@ -126,8 +126,9 @@ impl AppState {
             .cloned()
             .or_else(|| env::current_dir().ok())
             .ok_or_else(|| io::Error::other("could not determine fallback directory"))?;
+
         let mut app = Self::from_dir(config, &fallback)?;
-        app.trash = Some(TrashState::new_loading());
+        app.trash = Some(TrashState::new_loading(false));
         Ok(app)
     }
 
@@ -1000,22 +1001,23 @@ impl AppState {
     }
 
     pub(super) fn enter_trash(&mut self, workers: &Workers) {
+        let can_exit = self.trash.as_ref().is_none_or(TrashState::can_exit);
         self.preview.clear();
-        self.trash = Some(TrashState::new_loading());
+        self.trash = Some(TrashState::new_loading(can_exit));
         self.request_trash_list(workers);
     }
 
     fn exit_trash(&mut self, workers: &Workers) {
+        if !self.trash.as_ref().is_some_and(TrashState::can_exit) {
+            return;
+        }
+
         self.trash = None;
         self.preview.clear();
-        if self.nav.request_id() == 0 {
-            self.initialize(workers, None);
-        } else {
-            self.request_dir_reload(workers);
-            self.request_parent_content(workers);
-            self.request_preview_force(workers);
-            self.update_file_info_cache(workers);
-        }
+        self.request_dir_reload(workers);
+        self.request_parent_content(workers);
+        self.request_preview_force(workers);
+        self.update_file_info_cache(workers);
     }
 
     pub(super) fn confirm_trash(&mut self, workers: &Workers, empty: bool) {

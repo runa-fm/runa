@@ -1012,14 +1012,18 @@ fn draw_trash_preview(frame: &mut Frame, app: &AppState, trash: &TrashState, con
     let dim_style = Style::default().add_modifier(Modifier::DIM);
 
     let Some(entry) = trash.selected_entry() else {
-        let lines = vec![
-            Line::raw(""),
-            Line::from(vec![
-                Span::raw(context.padding_str),
-                Span::styled("[h] Back", dim_style),
-            ]),
-        ];
-        frame.render_widget(Paragraph::new(Text::from(lines)).block(block), context.area);
+        let content = if trash.can_exit() {
+            Text::from(vec![
+                Line::raw(""),
+                Line::from(vec![
+                    Span::raw(context.padding_str),
+                    Span::styled("[h] Back", dim_style),
+                ]),
+            ])
+        } else {
+            Text::default()
+        };
+        frame.render_widget(Paragraph::new(content).block(block), context.area);
         return;
     };
 
@@ -1072,10 +1076,16 @@ fn draw_trash_preview(frame: &mut Frame, app: &AppState, trash: &TrashState, con
         add_row("Size:", size_str);
     }
 
+    let hint = if trash.can_exit() {
+        "[r] Restore  [d] Delete  [E] Empty  [h] Back"
+    } else {
+        "[r] Restore  [d] Delete  [E] Empty"
+    };
+
     lines.push(Line::raw(""));
     lines.push(Line::from(vec![
         Span::raw(context.padding_str),
-        Span::styled("[r] Restore  [d] Delete  [E] Empty  [h] Back", dim_style),
+        Span::styled(hint, dim_style),
     ]));
 
     frame.render_widget(Paragraph::new(Text::from(lines)).block(block), context.area);

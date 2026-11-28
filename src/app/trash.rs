@@ -12,16 +12,18 @@ pub(crate) struct TrashState {
     markers: HashSet<OsString>,
     supported: bool,
     loading: bool,
+    can_exit: bool,
 }
 
 impl TrashState {
-    pub(crate) fn new_loading() -> Self {
+    pub(crate) fn new_loading(can_exit: bool) -> Self {
         Self {
             items: Arc::default(),
             selected: 0,
             markers: HashSet::new(),
             supported: true,
             loading: true,
+            can_exit,
         }
     }
 
@@ -31,6 +33,7 @@ impl TrashState {
         selected: usize,
         supported: bool,
         loading: bool,
+        can_exit: bool,
     }
 
     pub(crate) fn update(&mut self, items: Arc<[TrashEntry]>, supported: bool) {
@@ -154,7 +157,7 @@ mod tests {
 
     #[test]
     fn update_clamps_selection_and_drops_stale_markers() {
-        let mut trash = TrashState::new_loading();
+        let mut trash = TrashState::new_loading(true);
         trash.update(Arc::from([entry("1", "a.txt"), entry("2", "b.txt")]), true);
         trash.move_down();
         trash.toggle_marker();
@@ -168,7 +171,7 @@ mod tests {
 
     #[test]
     fn target_items_prefers_markers_over_selection() {
-        let mut trash = TrashState::new_loading();
+        let mut trash = TrashState::new_loading(true);
         trash.update(Arc::from([entry("1", "a.txt"), entry("2", "b.txt")]), true);
         assert_eq!(trash.target_names(), vec!["a.txt"]);
 
