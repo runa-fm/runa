@@ -109,32 +109,29 @@ pub(crate) fn draw_show_info_dialog(
     );
 }
 
+fn format_prefix_line(items: &[(&[String], &str)], accent_style: Style) -> Line<'static> {
+    let mut spans: Vec<Span<'static>> = Vec::with_capacity(items.len() * 4);
+    for (keys, desc) in items {
+        let Some(primary_key) = keys.first() else {
+            continue;
+        };
+        if !spans.is_empty() {
+            spans.push(Span::raw("    "));
+        }
+        spans.push(Span::styled(format!("[{primary_key}]"), accent_style));
+        spans.push(Span::raw(" "));
+        spans.push(Span::raw((*desc).to_string()));
+    }
+    Line::from(spans)
+}
+
 pub(crate) fn draw_prefix_help_overlay(frame: &mut Frame, app: &AppState, accent_style: Style) {
     let widget = app.config().theme().widget();
     let area = frame.area();
     let border_type = app.config().display().border_type();
     let keys = app.config().keys();
-    let go_to_top_keys = keys.go_to_top();
-    let go_to_home_keys = keys.go_to_home();
-    let go_to_path_keys = keys.go_to_path();
-    let go_to_trash_keys = keys.go_to_trash();
 
-    let is_sort_prefix = app.actions().prefix_recognizer().is_sort_state();
-    if is_sort_prefix {
-        fn mk_line(items: &[(&[String], &str)], accent_style: Style) -> Line<'static> {
-            let mut spans: Vec<Span<'static>> = Vec::with_capacity(items.len() * 4);
-            for (i, (keys, desc)) in items.iter().enumerate() {
-                if i > 0 {
-                    spans.push(Span::raw("    "));
-                }
-                let primary_key = keys.first().map(|s| s.as_str()).unwrap_or("?");
-                spans.push(Span::styled(format!("[{}]", primary_key), accent_style));
-                spans.push(Span::raw(" "));
-                spans.push(Span::raw((*desc).to_string()));
-            }
-            Line::from(spans)
-        }
-
+    let (title, lines, configured_size) = if app.actions().prefix_recognizer().is_sort_state() {
         let row1: [(&[String], &str); 4] = [
             (keys.sort_by_name(), "Name"),
             (keys.sort_by_modified(), "Modified"),
@@ -146,82 +143,57 @@ pub(crate) fn draw_prefix_help_overlay(frame: &mut Frame, app: &AppState, accent
             (keys.sort_by_extension(), "Ext"),
             (keys.sort_by_natural(), "Natural"),
         ];
-
-        let lines: Vec<Line<'static>> =
-            vec![mk_line(&row1, accent_style), mk_line(&row2, accent_style)];
-
-        let area = frame.area();
-        let border_pad = 2usize;
-        let inner_pad = 2usize;
-
-        let max_line_w = lines.iter().map(|l| l.width()).max().unwrap_or(0);
-
-        let min_width = 24usize;
-        let max_width = (area.width as usize).saturating_sub(2).max(min_width);
-
-        let width = (max_line_w + inner_pad + border_pad)
-            .max(min_width)
-            .min(max_width) as u16;
-
-        let height = (lines.len() + border_pad).min(area.height as usize) as u16;
-
-        widgets::draw_dialog(
-            frame,
-            DialogLayout {
-                area,
-                position: widget.go_to_help_position(),
-                size: DialogSize::Custom(width, height),
-            },
-            border_type,
-            &widgets::get_dialog_style(app, accent_style, "Sort", None),
-            Text::from(lines),
-            Some(Alignment::Center),
+        (
+            "Sort",
+            vec![
+                format_prefix_line(&row1, accent_style),
+                format_prefix_line(&row2, accent_style),
+            ],
             None,
-        );
-        return;
-    }
+        )
+    } else {
+        let row: [(&[String], &str); 4] = [
+            (keys.go_to_top(), "Go to top"),
+            (keys.go_to_home(), "Go to home"),
+            (keys.go_to_path(), "Go to path"),
+            (keys.go_to_trash(), "Go to trash"),
+        ];
+        (
+            "Go to",
+            vec![format_prefix_line(&row, accent_style)],
+            Some(widget.go_to_help_size()),
+        )
+    };
 
-    let mut go_to_prefixes: Vec<HelpRow> =
-        Vec::with_capacity(go_to_top_keys.len() + go_to_path_keys.len());
-    if let Some(k) = go_to_top_keys.first() {
-        go_to_prefixes.push((k.clone(), "Go to top"));
-    }
-    if let Some(k) = go_to_home_keys.first() {
-        go_to_prefixes.push((k.clone(), "Go to home"));
-    }
-    if let Some(k) = go_to_path_keys.first() {
-        go_to_prefixes.push((k.clone(), "Go to path"));
-    }
-    if let Some(k) = go_to_trash_keys.first() {
-        go_to_prefixes.push((k.clone(), "Go to trash"));
-    }
+    let border_pad = 2usize;
+    let inner_pad = 2usize;
+    let max_line_w = lines.iter().map(|l| l.width()).max().unwrap_or(0);
+    let min_width = 24usize;
+    let max_width = (area.width as usize).saturating_sub(2).max(min_width);
+    let auto_w = (max_line_w + inner_pad + border_pad)
+        .max(min_width)
+        .min(max_width) as u16;
+    let auto_h = (lines.len() + border_pad).min(area.height as usize) as u16;
 
-    let mut spans = Vec::with_capacity(4 * go_to_prefixes.len() + 2);
-    for (i, (ch, desc)) in go_to_prefixes.iter().enumerate() {
-        if i > 0 {
-            spans.push(Span::raw("    "));
-        }
-        spans.push(Span::styled(format!("[{}]", ch), accent_style));
-        spans.push(Span::raw(" "));
-        spans.push(Span::raw(*desc));
-    }
-
-    spans.push(Span::raw(" "));
-    let line = Line::from(spans);
-
-    let size = widget.go_to_help_size();
-    let position = widget.go_to_help_position();
+    let size = match configured_size {
+        Some(DialogSize::Custom(w, h)) => DialogSize::Custom(
+            w.max(auto_w).min(area.width),
+            h.max(auto_h).min(area.height),
+        ),
+        Some(other) => other,
+        None => DialogSize::Custom(auto_w, auto_h),
+    };
 
     widgets::draw_dialog(
         frame,
         DialogLayout {
             area,
-            position,
+            position: widget.go_to_help_position(),
             size,
         },
         border_type,
-        &widgets::get_dialog_style(app, accent_style, "Go to", None),
-        line,
+        &widgets::get_dialog_style(app, accent_style, title, None),
+        Text::from(lines),
         Some(Alignment::Center),
         None,
     );
