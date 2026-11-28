@@ -4,15 +4,26 @@ All the changes made to runa are documented here.
 
 ## [0.15.8] - UNRELEASED
 
+### Added
+- **Command outputs**: Commands now can output overlays and multi-line ANSI message widgets (`output = "overlay"` or `"message"`).
+- **Trash view**: Virtual trash view for cleanly navigating the trash/recycle-bin. Reachable via `g t`, `rn trash` or `"trash"` in the startup tabs. Currently only supported on Linux and Windows.
+- **Shared overlays**: File information and message overlays are now shared across tabs.
+
 ### Changed
 - **Error Messages**: Removed duplicated `Permission denied:` prefix from directory navigations.
 
 ### Fixed
+- **Startup**: Invalid `startup.tabs` paths are now skipped instead of blocking the startup of runa.
 - **Tab width**: Internal preview method now correctly renders the configured tab width to the preview pane. Preview method `bat` was not affected by this bug.
+- **Tab switch**: Switching between tabs after startup no longer flashes `[Empty]`.
 
 ### Internal
 - **ANSI preview parser**: Replaced `ansi-to-tui` crate with an internal parser in `utils/ansi.rs`. Avoids extra allocation and handles `Color::Reset` cleanup in previews better.
+- **Dependencies**:
+    - Updated `notify` to `9.0.0`.
+    - Updated `trash` to `5.4.0`.
 - **Dev dependencies**: Removed `filetime` dev dependency in favour of `std::fs::set_times`.
+- **Fedora spec**: Updated `License` tag after dependency update.
 - **Refactor**:
     - Split timing constants into `throttle`, `delay` and `message` submodules.
     - Split `push_overlay_message` and `push_overlay_message_aligned` for cleaner callers who don't pass `None` for default alignment.

@@ -311,14 +311,14 @@ Option to configure the find widget width.
 
 #### Widget Labels and Values
 
-- `label.fg` - Change the label color of a widget. Styles the "key" text (e.g. Name:, Size:, Perms:, etc.). Applies to widgets: File Info, Keybind Help.
+- `label.fg` - Change the label color of a widget. Styles the "key" text (e.g. Name:, Size:, Perms:, etc.). Applies to widgets: File Info, Keybind Help, and Trash preview.
 - `label.bg` - Label background color
-- `value.fg` - Change the value color of a widget. Styles the content of the widget data (e.g. main.rs, 4 KB, etc.). Applies to widgets: File Info, Keybind Help.
+- `value.fg` - Change the value color of a widget. Styles the content of the widget data (e.g. main.rs, 4 KB, etc.). Applies to widgets: File Info, Keybind Help, and Trash preview.
 - `value.bg` - Value background color
 
 #### Go-to Help Widget
 
-- `go_to_help.size` - Set the size of the go to help widget when pressing "g" (default `[58, 3]`)
+- `go_to_help.size` - Minimum size of the go to help widget when pressing "g" (default `[58, 3]`; expands automatically to fit the rendered bindings)
 - `go_to_help.position` - Set the position of the go to help widget (default `"bottom"`)
 
 ### `[theme.status_line]`

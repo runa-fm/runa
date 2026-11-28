@@ -90,15 +90,17 @@ List of paths that open as tabs on startup. Supports up to 9 tabs. Tab placement
 
 **Special values**:
 - `"cwd"` or `"."` — Opens at the current working directory
+- `"trash"` or `"Trash"` — Opens a virtual Trash tab (`trash:/`; Linux and Windows only)
 
 **Example**:
 ```toml
 [general.startup]
-tabs = ["cwd", "~/Downloads", "~/Projects"]
+tabs = ["cwd", "~/Downloads", "~/Projects", "trash"]
 ```
 
 **Notes**:
 - On Windows, use single quotes for paths to avoid backslash escaping: `'C:\Users\...'`
 - With double quotes, escape backslashes: `"C:\\Users\\..."`
+- Invalid or missing paths in `startup.tabs` are skipped with a warning; if no tab can be opened, runa falls back to the current directory
 - Omitting this section starts runa normally at the current directory
-- You can also start multiple tabs from the CLI: `rn ~/path1 ~/path2 ~/path3`
+- You can also start multiple tabs from the CLI: `rn ~/path1 ~/path2 ~/path3` (including `rn trash`)

@@ -98,6 +98,8 @@ To use a shell, pass the path as its own argument and read it as `$1`. Never put
 
 By default a command takes over the terminal, like an editor. Use the table form with `terminal = false` to run it in the background. runa keeps running and shows a message if the command fails.
 
+You can also capture command output in the UI using `output = "overlay"` (scrollable ANSI modal) or `output = "message"` (timed notification toast). See [`output`](commands.md#output) for details.
+
 ```toml
 [editor.ext]
 zip = { cmd = ["7z", "x", "-y", "{path}", "-o{unused_stem}"], terminal = false }

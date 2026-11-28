@@ -31,6 +31,7 @@
 - **Rich File Actions:** Move, filter, copy, rename, tabs, and more, all with the keyboard.
 - **Extremely Customizable:** Tweak keybindings, colors, and layout via TOML.
 - **Blazing Fast:** Instant navigation, even in huge directory trees.
+- **Stateless:** Clean in-memory runtime without writing any cache, history or state files to disk.
 - **Minimal Dependencies:** Only the essential crates; advanced features are opt-in.
 - **Cross-Platform:** Works on Linux, macOS, and Windows.
 - **Keyboard-Driven:** Every action accessible by keybindings. No mouse needed.

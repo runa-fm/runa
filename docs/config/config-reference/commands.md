@@ -10,6 +10,8 @@ The `[commands]` section binds programs to keys. Each command has a name, the ke
 [commands]
 lazygit = { keys = "<m-g>", cmd = "lazygit" }
 extract = { keys = "x", cmd = ["7z", "x", "-o{unused_stem}", "{path}"], terminal = false }
+status  = { keys = "<m-s>", cmd = ["git", "status"], output = "overlay" }
+push    = { keys = "<m-p>", cmd = ["git", "push"], output = "message" }
 ```
 
 ## Options
@@ -33,9 +35,23 @@ The program and its arguments. Unlike editor commands, no path is appended.
 ### `terminal`
 
 - **Type**: `boolean`
-- **Default**: `true`
+- **Default**: `true` (when `output` is not set)
 
 With `true`, the command takes over the terminal, like an editor. With `false`, it runs in the background and runa shows a message if it fails. See [Running Without the Terminal](editor.md#running-without-the-terminal).
+
+Cannot be set to `true` together with `output`.
+
+### `output`
+
+- **Type**: `string`
+- **Options**: `"overlay"`, `"message"`
+
+Runs the command in the background and shows its stdout and stderr inside runa with ANSI color support:
+
+- `"overlay"` — Opens a scrollable modal overlay showing the command's output. Scroll with `j`/`k` or `Up`/`Down`, `PgUp`/`PgDn`, `g`/`G` or `Home`/`End`, pan horizontally with `h`/`l` or `Left`/`Right` (`0` resets horizontal scroll), and close with `q` or `Esc`.
+- `"message"` — Shows up to 12 lines of output in a timed notification message.
+
+Setting `output` implies running in the background (`terminal = false`).
 
 ## Working Directory
 

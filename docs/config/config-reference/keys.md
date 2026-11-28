@@ -151,6 +151,19 @@ Go to home directory.
 
 Go to specific path (opens input dialog).
 
+### `go_to_trash`
+
+- **Default**: `["t"]`
+
+Open the virtual Trash view (`trash:/`). Supported on Linux and Windows; macOS displays an unsupported notice.
+
+Inside the Trash view:
+- `r` — Restore selected or marked items to their original location
+- `d` / `<m-d>` (uses `delete` / `alternate_delete`) — Permanently delete selected or marked items (with confirmation)
+- `E` — Empty trash (with confirmation)
+- `h` / `Left` (uses `go_parent`) — Return to the previous directory (only when opened via `g t`; startup Trash tabs stay in Trash until navigated away with `g h` / `g p`)
+- Standard navigation (`go_up`, `go_down`, `g g`, `go_to_bottom`), markers (`toggle_marker`, `select_all`, `clear_markers`), tabs, and `reload` work as in the main pane.
+
 ## View and Display
 
 ### `filter`

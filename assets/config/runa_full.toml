@@ -40,11 +40,13 @@ move_to_trash = true
 # Ommiting this starts runa normally at the current directory.
 [general.startup]
 # 'cwd' or '.' starts the tab normally at the current dir.
-# Tab placments are determined by the index of the vector. Meaning ['tab0', 'tab1', 'tab2'].
+# 'trash' or 'Trash' opens a virtual Trash tab (Linux and Windows).
+# Tab placements are determined by the index of the vector. Meaning ['tab0', 'tab1', 'tab2'].
+# Invalid paths are skipped with a warning; if none can be opened, runa falls back to cwd.
 # Note: Use single quotes (' ') for paths to avoid backslash escaping issues on Windows.
 # If you use double quotes (" "), remember to escape your backslashes (e.g. "C:\\Path\\") on Windows.
 #
-# tabs = ['cwd', '/path/', '/path/', '..']
+# tabs = ['cwd', '/path/', 'trash']
 
 [display]
 # Show the selection icon next to the file/directory name
@@ -56,7 +58,7 @@ dir_marker = true
 # Border style: "none", "unified", or "split"
 borders = "unified"
 
-# Border shape: "square", "rounded" or "double"
+# Border shape: "square", "rounded", "double" or "thick"
 border_shape = "square"
 
 # Show pane titles at the top (e.g., "Main", "Preview")
@@ -437,7 +439,7 @@ label.bg = "default"
 value.fg = "cyan"
 value.bg = "default"
 
-# Set the size and position of the go to help widget when pressing "g"
+# Set the minimum size and position of the go to help widget when pressing "g"
 go_to_help.size = [58, 3]
 go_to_help.position = "bottom"
 
@@ -518,7 +520,8 @@ default = "nvim"
 # Example:
 # system = ["pdf", "png", "jpg", "html"]
 
-# Run a command in the background with the table form and terminal = false
+# Run a command in the background with the table form and terminal = false,
+# or capture its output with output = "overlay" (scrollable modal) or output = "message" (timed toast).
 # File variables: {path}, {name}, {dir}, {stem}, {unused_stem}
 # {unused_stem} adds _1, _2, ... when the name is taken, so nothing is overwritten
 # Example:
@@ -530,10 +533,13 @@ default = "nvim"
 
 # Own commands bound to keys, using the same key syntax as [keys]
 # File variables refer to the selected entry, no path is appended
+# Use output = "overlay" for a scrollable ANSI output viewer, or output = "message" for a timed toast (up to 12 lines).
 # Example:
 # [commands]
 # lazygit = { keys = "<m-g>", cmd = "lazygit" }
 # extract = { keys = "x", cmd = ["7z", "x", "-o{unused_stem}", "{path}"], terminal = false }
+# status  = { keys = "<m-s>", cmd = ["git", "status"], output = "overlay" }
+# push    = { keys = "<m-p>", cmd = ["git", "push"], output = "message" }
 
 # ===========================
 #          KEYBINDS
@@ -573,6 +579,7 @@ select_all          = ["<c-a>"]
 alternate_delete    = ["<m-d>"]    # Alternates between move_to_trash and permanently delete
 go_to_bottom        = ["G"]
 keybind_help        = ["?"]
+reload              = ["<c-r>"]
 
 # Tab actions
 tab_new             = ["<c-t>"]
@@ -589,6 +596,7 @@ prefix_go_to        = ["g"]
 go_to_top           = ["g"]
 go_to_home          = ["h"]
 go_to_path          = ["p"]
+go_to_trash         = ["t"]
 
 # Sorting keybinds which are triggered by the "sort" prefix.
 sort                = ["o"]
