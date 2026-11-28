@@ -1,10 +1,12 @@
 //! Trash view action handlers for AppState.
 
+use std::sync::Arc;
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use crate::app::{
     ListNav, TrashState,
-    actions::InputMode,
+    actions::{ActionMode, InputMode},
     keymap::{Action, FileAction, NavAction},
     state::{AppState, KeypressResult},
 };
@@ -41,19 +43,27 @@ impl AppState {
         self.update_file_info_cache(workers);
     }
 
-    pub(super) fn confirm_trash(&mut self, workers: &Workers, empty: bool) {
-        let Some(trash) = self.trash.as_mut() else {
+    pub(super) fn confirm_trash(&mut self, workers: &Workers) {
+        let ActionMode::Input {
+            mode: InputMode::ConfirmTrash { empty, items, .. },
+            ..
+        } = self.actions.mode()
+        else {
             return;
         };
 
-        let op = if empty {
-            TrashOperation::Empty
+        if items.is_empty() {
+            return;
+        }
+
+        let op = if *empty {
+            TrashOperation::Empty(items.to_vec())
         } else {
-            let items = trash.target_items();
-            if items.is_empty() {
-                return;
-            }
-            TrashOperation::Purge(items)
+            TrashOperation::Purge(items.to_vec())
+        };
+
+        let Some(trash) = self.trash.as_mut() else {
+            return;
         };
 
         trash.clear_markers();
@@ -75,10 +85,19 @@ impl AppState {
             if let Some(trash) = self.trash.as_ref()
                 && !trash.items().is_empty()
             {
-                let count = trash.items().len();
+                let items: Vec<trash::TrashItem> =
+                    trash.items().iter().map(|e| e.item.clone()).collect();
+                let mut names: Vec<String> =
+                    trash.items().iter().map(|e| e.name_str.clone()).collect();
+                names.sort();
+                let count = items.len();
                 let label = if count == 1 { "item" } else { "items" };
                 self.enter_input_mode(
-                    InputMode::ConfirmTrash { empty: true },
+                    InputMode::ConfirmTrash {
+                        empty: true,
+                        items: Arc::from(items),
+                        names: Arc::from(names),
+                    },
                     format!("Empty trash ({count} {label})? (y/n)"),
                     None,
                 );
@@ -158,16 +177,22 @@ impl AppState {
                 KeypressResult::Consumed
             }
             Action::File(FileAction::Delete | FileAction::AlternateDelete) => {
-                if let Some(trash) = self.trash.as_ref()
-                    && !trash.target_items().is_empty()
-                {
-                    let count = trash.target_items().len();
-                    let label = if count == 1 { "item" } else { "items" };
-                    self.enter_input_mode(
-                        InputMode::ConfirmTrash { empty: false },
-                        format!("Permanently delete {count} {label}? (y/n)"),
-                        None,
-                    );
+                if let Some(trash) = self.trash.as_ref() {
+                    let items = trash.target_items();
+                    if !items.is_empty() {
+                        let names = trash.target_names();
+                        let count = items.len();
+                        let label = if count == 1 { "item" } else { "items" };
+                        self.enter_input_mode(
+                            InputMode::ConfirmTrash {
+                                empty: false,
+                                items: Arc::from(items),
+                                names: Arc::from(names),
+                            },
+                            format!("Permanently delete {count} {label}? (y/n)"),
+                            None,
+                        );
+                    }
                 }
                 KeypressResult::Consumed
             }

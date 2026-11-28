@@ -22,7 +22,7 @@ use crate::core::{proc::FindResult, workers::FileOperation};
 /// Used to determine which UI overlays, prompts, or context actions should be active.
 ///
 /// Used by [ActionContext] to track current user action state.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(crate) enum ActionMode {
     Normal,
     Input { mode: InputMode, prompt: String },
@@ -31,7 +31,7 @@ pub(crate) enum ActionMode {
 /// Enumerates all the available input field modes
 ///
 /// Used to select the prompts, behavior and the style of the input dialog.
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub(crate) enum InputMode {
     Rename,
     NewFile,
@@ -39,9 +39,13 @@ pub(crate) enum InputMode {
     Filter,
     ConfirmDelete {
         is_trash: bool,
+        targets: Arc<[PathBuf]>,
+        names: Arc<[String]>,
     },
     ConfirmTrash {
         empty: bool,
+        items: Arc<[trash::TrashItem]>,
+        names: Arc<[String]>,
     },
     ConfirmOverwrite {
         is_dir: bool,
@@ -138,24 +142,21 @@ impl ActionContext {
 
     // Actions functions
 
-    /// Deletes the currently marked files or the selected file if no markers exist.
+    /// Deletes the given target paths.
     ///
     /// Sends a delete task to the worker thread via the provided channel.
     pub(crate) fn action_delete(
         &mut self,
         nav: &mut NavState,
         worker_tx: &Sender<FileOperation>,
+        targets: Vec<PathBuf>,
         move_to_trash: bool,
     ) {
-        let targets = nav.get_action_targets();
         if targets.is_empty() {
             return;
         }
 
-        let _ = worker_tx.send(FileOperation::Delete(
-            targets.into_iter().collect(),
-            move_to_trash,
-        ));
+        let _ = worker_tx.send(FileOperation::Delete(targets, move_to_trash));
 
         nav.clear_markers();
     }

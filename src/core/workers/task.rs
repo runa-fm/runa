@@ -107,7 +107,7 @@ pub(crate) enum TrashOperation {
     List,
     Restore(Vec<trash::TrashItem>),
     Purge(Vec<trash::TrashItem>),
-    Empty,
+    Empty(Vec<trash::TrashItem>),
 }
 
 /// Supported file system operations the worker can perform.

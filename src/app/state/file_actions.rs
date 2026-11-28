@@ -333,20 +333,22 @@ impl AppState {
     /// Confirms deletion of the selected items.
     /// Calls actions::action_delete.
     pub(super) fn confirm_delete(&mut self, workers: &Workers) {
-        let move_to_trash = if let ActionMode::Input {
-            mode: InputMode::ConfirmDelete { is_trash },
+        let ActionMode::Input {
+            mode: InputMode::ConfirmDelete {
+                is_trash, targets, ..
+            },
             ..
         } = self.actions.mode()
-        {
-            *is_trash
-        } else {
-            self.config.general().move_to_trash()
+        else {
+            return;
         };
 
+        let move_to_trash = *is_trash;
+        let targets = targets.to_vec();
         let fileop_tx = workers.fileop_tx();
 
         self.actions
-            .action_delete(&mut self.nav, fileop_tx, move_to_trash);
+            .action_delete(&mut self.nav, fileop_tx, targets, move_to_trash);
     }
 
     pub(super) fn confirm_overwrite(&mut self, workers: &Workers) {

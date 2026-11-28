@@ -1202,4 +1202,130 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn confirm_trash_keeps_snapshotted_targets_across_refresh()
+    -> Result<(), Box<dyn std::error::Error>> {
+        use crate::core::workers::TrashEntry;
+        use crossterm::event::{KeyCode, KeyModifiers};
+
+        let make_entry = |id: &str, name: &str| TrashEntry {
+            item: trash::TrashItem {
+                id: OsString::from(id),
+                name: OsString::from(name),
+                original_parent: PathBuf::from("/tmp"),
+                time_deleted: 1_700_000_000,
+            },
+            size: Some(trash::TrashItemSize::Bytes(10)),
+            name_str: name.to_string(),
+        };
+
+        let workers = dummy_workers();
+        let mut clipboard = Clipboard::default();
+        let mut app = AppState::from_trash(Arc::new(dummy_config()))?;
+
+        app.handle_worker_response(
+            WorkerResponse::TrashLoaded {
+                items: Arc::from([
+                    make_entry("1", "big_dir"),
+                    make_entry("2", "keep.txt"),
+                    make_entry("3", "other.txt"),
+                ]),
+                supported: true,
+                tab_id: None,
+            },
+            &workers,
+        );
+
+        app.handle_keypress(
+            KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE),
+            &workers,
+            &mut clipboard,
+        );
+        app.handle_keypress(
+            KeyEvent::new(KeyCode::Char('d'), KeyModifiers::NONE),
+            &workers,
+            &mut clipboard,
+        );
+
+        // Simulate a background refresh removing the top item and even the targeted item.
+        app.handle_worker_response(
+            WorkerResponse::TrashLoaded {
+                items: Arc::from([make_entry("3", "other.txt")]),
+                supported: true,
+                tab_id: None,
+            },
+            &workers,
+        );
+
+        match app.actions().mode() {
+            ActionMode::Input {
+                mode:
+                    InputMode::ConfirmTrash {
+                        empty,
+                        items,
+                        names,
+                    },
+                ..
+            } => {
+                assert!(!empty);
+                assert_eq!(items.len(), 1);
+                assert_eq!(items[0].id, OsString::from("2"));
+                assert_eq!(names.as_ref(), &["keep.txt".to_string()]);
+            }
+            _ => panic!("expected ConfirmTrash input mode"),
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn confirm_delete_keeps_snapshotted_targets_across_reload()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let workers = dummy_workers();
+        let temp = tempdir()?;
+        let mut app = AppState::from_dir(Arc::new(dummy_config()), temp.path())?;
+        let dir = app.nav().current_dir().to_path_buf();
+
+        let initial: Arc<[FileEntry]> = ["aaa.txt", "keep.txt"]
+            .iter()
+            .map(|name| FileEntry::new(OsString::from(name), 0, None))
+            .collect();
+        app.nav.update_from_worker(dir.clone(), initial, None, None);
+        app.nav.move_down();
+
+        app.prompt_delete(false);
+
+        let request_id = app.nav.prepare_new_request();
+        app.handle_worker_response(
+            WorkerResponse::DirectoryLoaded {
+                path: dir.clone(),
+                entries: Arc::from([FileEntry::new(OsString::from("aaa.txt"), 0, None)]),
+                focus: None,
+                sort_column: None,
+                request: DirRequest::Nav(request_id),
+                tab_id: None,
+            },
+            &workers,
+        );
+
+        match app.actions().mode() {
+            ActionMode::Input {
+                mode:
+                    InputMode::ConfirmDelete {
+                        is_trash,
+                        targets,
+                        names,
+                    },
+                ..
+            } => {
+                assert!(!is_trash);
+                assert_eq!(targets.as_ref(), &[dir.join("keep.txt")]);
+                assert_eq!(names.as_ref(), &["keep.txt".to_string()]);
+            }
+            _ => panic!("expected ConfirmDelete input mode"),
+        }
+
+        Ok(())
+    }
 }

@@ -553,20 +553,17 @@ fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<Wo
             }
             send_trash_list(res_tx, tab_id);
         }
-        TrashOperation::Empty => match trash_os::empty() {
-            Ok(()) => {
-                let _ = res_tx.send(WorkerResponse::Message("Trash emptied".to_string()));
-                let _ = res_tx.send(WorkerResponse::TrashLoaded {
-                    items: Arc::default(),
-                    supported: trash_os::SUPPORTED,
-                    tab_id,
-                });
+        TrashOperation::Empty(items) => {
+            match trash_os::purge_all(items) {
+                Ok(()) => {
+                    let _ = res_tx.send(WorkerResponse::Message("Trash emptied".to_string()));
+                }
+                Err(e) => {
+                    let _ = res_tx.send(WorkerResponse::Error(format!("Empty trash failed: {e}")));
+                }
             }
-            Err(e) => {
-                let _ = res_tx.send(WorkerResponse::Error(format!("Empty trash failed: {e}")));
-                send_trash_list(res_tx, tab_id);
-            }
-        },
+            send_trash_list(res_tx, tab_id);
+        }
     }
 }
 
@@ -631,12 +628,6 @@ mod trash_os {
     pub(super) fn purge_all(items: Vec<trash::TrashItem>) -> Result<(), String> {
         trash::os_limited::purge_all(items).map_err(|e| e.to_string())
     }
-
-    pub(super) fn empty() -> Result<(), String> {
-        trash::os_limited::list()
-            .and_then(trash::os_limited::purge_all)
-            .map_err(|e| e.to_string())
-    }
 }
 
 #[cfg(target_os = "macos")]
@@ -656,10 +647,6 @@ mod trash_os {
     }
 
     pub(super) fn purge_all(_items: Vec<trash::TrashItem>) -> Result<(), String> {
-        Err(UNSUPPORTED.to_string())
-    }
-
-    pub(super) fn empty() -> Result<(), String> {
         Err(UNSUPPORTED.to_string())
     }
 }

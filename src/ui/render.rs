@@ -373,7 +373,7 @@ fn render_overlays(frame: &mut Frame, app: &AppState, accent_style: Style) {
 
 fn render_input_overlay(frame: &mut Frame, app: &AppState, accent_style: Style) {
     if let ActionMode::Input { mode, .. } = app.actions().mode() {
-        if *mode != InputMode::Find {
+        if !matches!(mode, InputMode::Find) {
             widgets::draw_input_dialog(frame, app, accent_style);
         } else {
             widgets::draw_find_dialog(frame, app, accent_style);

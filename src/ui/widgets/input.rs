@@ -27,19 +27,9 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
         let border_type = app.config().display().border_type();
 
         match mode {
-            InputMode::ConfirmDelete { is_trash } => {
-                let mut targets: Vec<String> = app
-                    .nav()
-                    .get_action_targets()
-                    .into_iter()
-                    .map(|p| {
-                        p.file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_default()
-                    })
-                    .collect();
-                targets.sort();
-
+            InputMode::ConfirmDelete {
+                is_trash, names, ..
+            } => {
                 let heading = if *is_trash {
                     "Files to move to trash"
                 } else {
@@ -57,25 +47,11 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
                     "Confirm Delete",
                     prompt,
                     heading,
-                    &targets,
+                    names,
                 );
             }
 
-            InputMode::ConfirmTrash { empty } => {
-                let targets = app
-                    .trash()
-                    .map(|trash| {
-                        if *empty {
-                            let mut names: Vec<String> =
-                                trash.items().iter().map(|e| e.name_str.clone()).collect();
-                            names.sort();
-                            names
-                        } else {
-                            trash.target_names()
-                        }
-                    })
-                    .unwrap_or_default();
-
+            InputMode::ConfirmTrash { empty, names, .. } => {
                 let title = if *empty {
                     "Empty Trash"
                 } else {
@@ -93,7 +69,7 @@ pub(crate) fn draw_input_dialog(frame: &mut Frame, app: &AppState, accent_style:
                     title,
                     prompt,
                     "Items to permanently delete",
-                    &targets,
+                    names,
                 );
             }
 

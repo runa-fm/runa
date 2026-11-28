@@ -10,7 +10,9 @@
 //! helper functions for entering/exiting input modes
 //! and processing specific actions within those modes.
 
-use std::path::{MAIN_SEPARATOR, Path};
+use std::mem;
+use std::path::{MAIN_SEPARATOR, Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 use crossterm::event::{KeyCode::*, KeyEvent};
@@ -68,13 +70,17 @@ impl AppState {
                     InputMode::Rename => self.rename_entry(workers),
                     InputMode::Filter => self.apply_filter(workers),
                     InputMode::ConfirmDelete { .. } => self.confirm_delete(workers),
-                    InputMode::ConfirmTrash { empty } => self.confirm_trash(workers, *empty),
+                    InputMode::ConfirmTrash { .. } => self.confirm_trash(workers),
                     InputMode::ConfirmOverwrite { .. } => self.confirm_overwrite(workers),
                     InputMode::Find => self.handle_find(workers),
                     InputMode::MoveFile => self.move_file(workers),
                     InputMode::GoToPath => self.handle_go_to_path(workers),
                 }
-                if self.actions().mode() == &prev_action_mode {
+                if matches!(
+                    self.actions().mode(),
+                    ActionMode::Input { mode: cur, .. }
+                        if mem::discriminant(cur) == mem::discriminant(mode)
+                ) {
                     self.exit_input_mode();
                 }
                 KeypressResult::Consumed
@@ -152,11 +158,8 @@ impl AppState {
                     self.process_confirm_char(workers, c, Self::confirm_delete);
                     KeypressResult::Consumed
                 }
-                InputMode::ConfirmTrash { empty } => {
-                    let empty = *empty;
-                    self.process_confirm_char(workers, c, move |app, w| {
-                        app.confirm_trash(w, empty)
-                    });
+                InputMode::ConfirmTrash { .. } => {
+                    self.process_confirm_char(workers, c, Self::confirm_trash);
                     KeypressResult::Consumed
                 }
                 InputMode::ConfirmOverwrite { .. } => {
@@ -332,11 +335,21 @@ impl AppState {
 
     /// Prompts the user to confirm deletion of selected items.
     pub(super) fn prompt_delete(&mut self, is_trash: bool) {
-        let targets = self.nav.get_action_targets();
+        let targets: Vec<PathBuf> = self.nav.get_action_targets().into_iter().collect();
         let count = targets.len();
-        if targets.is_empty() {
+        if count == 0 {
             return;
         }
+
+        let mut names: Vec<String> = targets
+            .iter()
+            .map(|p| {
+                p.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            })
+            .collect();
+        names.sort();
 
         let action_word = if is_trash { "Trash" } else { "Delete" };
         let item_label = if count > 1 {
@@ -346,7 +359,15 @@ impl AppState {
         };
 
         let prompt_text = format!("{} {}? [Y/n]", action_word, item_label);
-        self.enter_input_mode(InputMode::ConfirmDelete { is_trash }, prompt_text, None);
+        self.enter_input_mode(
+            InputMode::ConfirmDelete {
+                is_trash,
+                targets: Arc::from(targets),
+                names: Arc::from(names),
+            },
+            prompt_text,
+            None,
+        );
     }
 
     /// Prompts the user to rename the selected entry.

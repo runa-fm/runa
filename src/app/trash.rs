@@ -44,9 +44,15 @@ impl TrashState {
         let valid_ids: HashSet<&OsStr> = items.iter().map(|e| e.item.id.as_os_str()).collect();
         self.markers.retain(|id| valid_ids.contains(id.as_os_str()));
 
+        let selected_id = self.selected_entry().map(|e| e.item.id.clone());
+
         self.items = items;
         if self.items.is_empty() {
             self.selected = 0;
+        } else if let Some(pos) =
+            selected_id.and_then(|id| self.items.iter().position(|e| e.item.id == id))
+        {
+            self.selected = pos;
         } else if self.selected >= self.items.len() {
             self.selected = self.items.len() - 1;
         }
@@ -163,6 +169,34 @@ mod tests {
         trash.update(Arc::from([entry("1", "a.txt")]), true);
         assert_eq!(trash.selected(), 0);
         assert!(trash.markers().is_empty());
+    }
+
+    #[test]
+    fn update_keeps_selection_on_same_item_by_id() {
+        let mut trash = TrashState::new_loading(true);
+        trash.update(
+            Arc::from([
+                entry("1", "big_dir"),
+                entry("2", "keep.txt"),
+                entry("3", "other.txt"),
+            ]),
+            true,
+        );
+        trash.move_down();
+        assert_eq!(
+            trash.selected_entry().map(|e| e.item.id.as_os_str()),
+            Some(OsStr::new("2"))
+        );
+
+        trash.update(
+            Arc::from([entry("2", "keep.txt"), entry("3", "other.txt")]),
+            true,
+        );
+        assert_eq!(trash.selected(), 0);
+        assert_eq!(
+            trash.selected_entry().map(|e| e.item.id.as_os_str()),
+            Some(OsStr::new("2"))
+        );
     }
 
     #[test]
