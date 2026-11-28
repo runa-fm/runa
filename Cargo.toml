@@ -1,7 +1,7 @@
 [package]
 name = "runa-fm"
 description = "A fast, keyboard-focused terminal file manager (TUI). Highly configurable and lightweight."
-version = "0.16.0-beta.1"
+version = "0.16.0-beta.2"
 edition = "2024"
 rust-version = "1.91"
 license = "MIT OR Apache-2.0"
@@ -44,7 +44,7 @@ crossbeam-channel = "0.5.17"
 dashmap = { version = "6.2.1", default-features = false }
 fuzzy-matcher = "0.3.7"
 humansize = "2.1.3"
-jiff = { version = "1.0.1", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
+jiff = { version = "1.0.2", default-features = false, features = ["std", "tz-system", "tzdb-zoneinfo", "tzdb-bundle-platform"] }
 phf = { version = "0.14.0", default-features = false, features = ["macros"] }
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
 serde = { version = "1.0", features = ["derive"] }
