@@ -259,9 +259,14 @@ pub(crate) fn handle_tab_action(
                 }
 
                 let active = tabs.current_tab_mut();
-                active.request_dir_reload(workers);
-                active.request_parent_content(workers);
+                if active.nav().request_id() == 0 {
+                    active.initialize(workers, None);
+                } else {
+                    active.request_dir_reload(workers);
+                    active.request_parent_content(workers);
+                }
             }
+
             KeypressResult::Consumed
         }
     }
