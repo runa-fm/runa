@@ -577,6 +577,11 @@ fn send_trash_list(res_tx: &Sender<WorkerResponse>, tab_id: Option<usize>) {
             });
         }
         Err(e) => {
+            let _ = res_tx.send(WorkerResponse::TrashLoaded {
+                items: Arc::default(),
+                supported: trash_os::SUPPORTED,
+                tab_id,
+            });
             let _ = res_tx.send(WorkerResponse::Error(format!("Trash error: {e}")));
         }
     }

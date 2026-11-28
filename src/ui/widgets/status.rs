@@ -199,7 +199,7 @@ pub(crate) fn draw_status_bar(
         }
     }
 
-    if status_cfg.filter() == position {
+    if status_cfg.filter() == position && !app.is_trash() {
         let filter = app.nav().active_filter();
         if !filter.is_empty() {
             add_sep(&mut spans);

@@ -389,7 +389,9 @@ fn render_single_overlay(
 ) {
     match overlay {
         Overlay::ShowInfo => {
-            if let Some(info) = app.selected_file_info() {
+            if !app.is_trash()
+                && let Some(info) = app.selected_file_info()
+            {
                 widgets::draw_show_info_dialog(frame, app, accent_style, info);
             }
         }

@@ -230,19 +230,6 @@ impl Keymap {
 
         None
     }
-
-    pub(crate) fn go_to_map(&self) -> &HashMap<KeyCode, PrefixCommand> {
-        &self.go_to_map
-    }
-
-    pub(crate) fn sort_map(&self) -> &HashMap<KeyCode, PrefixCommand> {
-        &self.sort_map
-    }
-
-    crate::getters! {
-        sort_prefix: &[Key],
-        go_to_prefix: &[Key],
-    }
 }
 
 pub(crate) struct KeyPrefix {
@@ -274,10 +261,8 @@ impl KeyPrefix {
     pub(crate) fn feed(
         &mut self,
         key: &KeyEvent,
-        go_to_map: &HashMap<KeyCode, PrefixCommand>,
-        sort_map: &HashMap<KeyCode, PrefixCommand>,
-        sort_prefix: &[Key],
-        go_to_prefix: &[Key],
+        keymap: &Keymap,
+        allow_sort: bool,
     ) -> Option<PrefixCommand> {
         self.started = false;
         self.exited = false;
@@ -289,16 +274,16 @@ impl KeyPrefix {
                     modifiers: key.modifiers,
                 };
 
-                if go_to_prefix.contains(&k) {
+                if keymap.go_to_prefix.contains(&k) {
                     self.start(PrefixState::GoTo);
-                } else if sort_prefix.contains(&k) {
+                } else if allow_sort && keymap.sort_prefix.contains(&k) {
                     self.start(PrefixState::Sort);
                 }
 
                 None
             }
-            PrefixState::GoTo => self.finish(key, go_to_map),
-            PrefixState::Sort => self.finish(key, sort_map),
+            PrefixState::GoTo => self.finish(key, &keymap.go_to_map),
+            PrefixState::Sort => self.finish(key, &keymap.sort_map),
         }
     }
 

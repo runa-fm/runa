@@ -207,18 +207,11 @@ impl AppState {
         workers: &Workers,
         key: &KeyEvent,
     ) -> Option<KeypressResult> {
-        let go_to_map = self.keymap.go_to_map();
-        let sort_map = self.keymap.sort_map();
-
+        let allow_sort = !self.is_trash();
         let (started, exited, result, consumed) = {
             let prefix = self.actions.prefix_recognizer_mut();
             let was_active = prefix.is_active();
-
-            let go_to_prefix = self.keymap.go_to_prefix();
-            let sort_prefix = self.keymap.sort_prefix();
-
-            let result = prefix.feed(key, go_to_map, sort_map, sort_prefix, go_to_prefix);
-
+            let result = prefix.feed(key, &self.keymap, allow_sort);
             let consumed = was_active && key.code == Esc;
 
             (
@@ -263,11 +256,15 @@ impl AppState {
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToHome) => {
-                self.handle_go_to_home(workers);
+                if self.trash.as_ref().is_none_or(|t| t.can_exit()) {
+                    self.handle_go_to_home(workers);
+                }
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToPath) => {
-                self.prompt_go_to_path();
+                if self.trash.as_ref().is_none_or(|t| t.can_exit()) {
+                    self.prompt_go_to_path();
+                }
                 Some(KeypressResult::Consumed)
             }
             PrefixCommand::Nav(NavAction::GoToTrash) => {

@@ -146,10 +146,7 @@ impl OverlayStack {
     }
 
     pub(crate) fn needs_scroll(&self) -> bool {
-        matches!(
-            self.top(),
-            Some(Overlay::ShowInfo) | Some(Overlay::KeybindHelp) | Some(Overlay::CommandOutput(_))
-        )
+        self.is_open(OverlayKind::KeybindHelp) || self.is_open(OverlayKind::CommandOutput)
     }
 
     pub(crate) fn find_command_output_mut(&mut self, id: u64) -> Option<&mut CommandOutputOverlay> {

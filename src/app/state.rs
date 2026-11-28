@@ -462,17 +462,20 @@ impl AppState {
                         self.parent.invalidate_if_path(path);
                     }
 
-                    let should_refresh_preview = self.preview.current_path().is_some_and(|path| {
-                        invalidation_paths
-                            .iter()
-                            .any(|dir| path == dir || path.parent() == Some(dir.as_path()))
-                    });
-                    if should_refresh_preview {
-                        self.request_preview_force(workers);
-                    }
+                    if !self.is_trash() {
+                        let should_refresh_preview =
+                            self.preview.current_path().is_some_and(|path| {
+                                invalidation_paths
+                                    .iter()
+                                    .any(|dir| path == dir || path.parent() == Some(dir.as_path()))
+                            });
+                        if should_refresh_preview {
+                            self.request_preview_force(workers);
+                        }
 
-                    self.request_dir_load(workers, focus);
-                    self.request_parent_content(workers);
+                        self.request_dir_load(workers, focus);
+                        self.request_parent_content(workers);
+                    }
                 }
             }
 

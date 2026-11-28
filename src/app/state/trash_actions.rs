@@ -176,6 +176,18 @@ impl AppState {
                 }
                 KeypressResult::Consumed
             }
+            Action::Nav(NavAction::ScrollUp) => {
+                if self.overlays.needs_scroll() {
+                    self.actions.scroll().scroll_up();
+                }
+                KeypressResult::Consumed
+            }
+            Action::Nav(NavAction::ScrollDown) => {
+                if self.overlays.needs_scroll() {
+                    self.actions.scroll().scroll_down();
+                }
+                KeypressResult::Consumed
+            }
             Action::File(FileAction::Delete | FileAction::AlternateDelete) => {
                 if let Some(trash) = self.trash.as_ref() {
                     let items = trash.target_items();

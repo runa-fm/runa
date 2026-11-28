@@ -14,6 +14,8 @@ All the changes made to runa are documented here.
 
 ### Fixed
 - **Startup**: Invalid `startup.tabs` paths are now skipped instead of blocking the startup of runa.
+- **Delete**: Confirmations for delete/trash dialogs now snapshot targets across reloads.
+- **UI**: `go to` prefix no longer truncates.
 - **Tab width**: Internal preview method now correctly renders the configured tab width to the preview pane. Preview method `bat` was not affected by this bug.
 - **Tab switch**: Switching between tabs after startup no longer flashes `[Empty]`.
 
