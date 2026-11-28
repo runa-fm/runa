@@ -180,7 +180,7 @@ fn cancel_tree(proc: &mut Child) {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        let _ = Command::new("taskkill")
+        let _ = Command::new("taskkill.exe")
             .args(["/T", "/F", "/PID", &proc.id().to_string()])
             .stdin(Stdio::null())
             .stdout(Stdio::null())
