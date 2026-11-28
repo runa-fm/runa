@@ -36,7 +36,10 @@ use crate::core::{
         Workers,
     },
 };
-use crate::utils::timings::{self, Throttler};
+use crate::utils::{
+    ansi,
+    timings::{self, Throttler},
+};
 
 /// Enumeration for each individual keypress result processed.
 ///
@@ -498,6 +501,24 @@ impl AppState {
                 }
             },
 
+            WorkerResponse::Message(msg) => {
+                self.push_overlay_message(msg, timings::message::DEFAULT);
+            }
+
+            WorkerResponse::CommandOutput {
+                id,
+                lines,
+                success,
+                exit_code,
+                truncated,
+                tab_id: _,
+            } => {
+                if let Some(overlay) = self.overlays_mut().find_command_output_mut(id) {
+                    let text = ansi::parse_lines(lines);
+                    overlay.finish(text, success, exit_code, truncated);
+                }
+            }
+
             WorkerResponse::Error(e) => {
                 self.push_overlay_message(e, timings::message::WORKER_ERROR);
             }
@@ -517,6 +538,10 @@ impl AppState {
     ) -> KeypressResult {
         if self.actions.is_input_mode() {
             return self.handle_input_mode(workers, key);
+        }
+
+        if let Some(res) = self.handle_modal_overlay_keypress(&key) {
+            return res;
         }
 
         if let Some(res) = self.handle_esc_close_overlays(&key) {

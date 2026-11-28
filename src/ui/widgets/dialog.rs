@@ -157,13 +157,20 @@ pub(crate) fn draw_dialog<'a, T>(
     let dialog = dialog_area(layout.area, layout.size, layout.position);
     let text = content.into();
     let inner_height = dialog.height.saturating_sub(2);
+    let inner_width = dialog.width.saturating_sub(2);
 
-    let current_offset = if let Some(state) = scroll_state {
-        let max = text.lines.len().saturating_sub(usize::from(inner_height));
-        state.set_max_offset(max);
-        u16::try_from(state.offset()).unwrap_or(u16::MAX)
+    let (v_offset, h_offset) = if let Some(state) = scroll_state {
+        let max_v = text.lines.len().saturating_sub(usize::from(inner_height));
+        state.set_max_offset(max_v);
+        let max_line_w = text.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+        let max_h = max_line_w.saturating_sub(usize::from(inner_width));
+        state.set_max_h_offset(max_h);
+        (
+            u16::try_from(state.offset()).unwrap_or(u16::MAX),
+            u16::try_from(state.h_offset()).unwrap_or(u16::MAX),
+        )
     } else {
-        0
+        (0, 0)
     };
 
     frame.render_widget(Clear, dialog);
@@ -185,7 +192,7 @@ pub(crate) fn draw_dialog<'a, T>(
         .block(block)
         .alignment(alignment.unwrap_or(Alignment::Left))
         .style(style.fg)
-        .scroll((current_offset, 0));
+        .scroll((v_offset, h_offset));
 
     frame.render_widget(para, dialog);
 }

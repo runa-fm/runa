@@ -517,11 +517,17 @@ impl AutoCompleteState {
 pub(crate) struct ScrollState {
     offset: Cell<usize>,
     max_offset: Cell<usize>,
+    h_offset: Cell<usize>,
+    max_h_offset: Cell<usize>,
 }
 
 impl ScrollState {
     pub(crate) fn offset(&self) -> usize {
         self.offset.get()
+    }
+
+    pub(crate) fn h_offset(&self) -> usize {
+        self.h_offset.get()
     }
 
     pub(crate) fn set_offset(&self, offset: usize) {
@@ -530,6 +536,16 @@ impl ScrollState {
 
     pub(crate) fn set_max_offset(&self, max: usize) {
         self.max_offset.set(max);
+        if self.offset.get() > max {
+            self.offset.set(max);
+        }
+    }
+
+    pub(crate) fn set_max_h_offset(&self, max: usize) {
+        self.max_h_offset.set(max);
+        if self.h_offset.get() > max {
+            self.h_offset.set(max);
+        }
     }
 
     pub(crate) fn scroll_up(&self) {
@@ -544,9 +560,32 @@ impl ScrollState {
         }
     }
 
+    pub(crate) fn scroll_left(&self, step: usize) {
+        self.h_offset.set(self.h_offset.get().saturating_sub(step));
+    }
+
+    pub(crate) fn scroll_right(&self, step: usize) {
+        let next = self
+            .h_offset
+            .get()
+            .saturating_add(step)
+            .min(self.max_h_offset.get());
+        self.h_offset.set(next);
+    }
+
+    pub(crate) fn scroll_to_bottom(&self) {
+        self.offset.set(self.max_offset.get());
+    }
+
+    pub(crate) fn reset_h(&self) {
+        self.h_offset.set(0);
+    }
+
     pub(crate) fn reset(&self) {
         self.offset.set(0);
         self.max_offset.set(0);
+        self.h_offset.set(0);
+        self.max_h_offset.set(0);
     }
 }
 

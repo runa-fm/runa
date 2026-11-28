@@ -397,6 +397,9 @@ fn render_single_overlay(
         Overlay::KeybindHelp => {
             widgets::draw_keybind_help(frame, app, accent_style);
         }
+        Overlay::CommandOutput(output) => {
+            widgets::draw_command_output(frame, app, accent_style, output);
+        }
     }
 }
 

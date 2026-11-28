@@ -33,38 +33,75 @@ pub(crate) const SYSTEM_OPENER: &str = "open";
 #[cfg(not(any(windows, target_os = "macos")))]
 pub(crate) const SYSTEM_OPENER: &str = "xdg-open";
 
+#[derive(Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum OutputMode {
+    Overlay,
+    Message,
+}
+
 /// How a command runs: in the terminal, or in the background.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum RunMode {
     Terminal,
     Background { check_status: bool },
+    Output(OutputMode),
 }
 
 impl RunMode {
-    /// Returns the run mode of a configured command.
-    pub(crate) const fn from_terminal(terminal: bool) -> Self {
-        if terminal {
-            RunMode::Terminal
-        } else {
-            RunMode::Background { check_status: true }
+    pub(crate) fn resolve(
+        terminal: Option<bool>,
+        output: Option<OutputMode>,
+    ) -> Result<Self, &'static str> {
+        match (terminal, output) {
+            (Some(true), Some(_)) => Err("cannot set both 'terminal = true' and 'output'"),
+            (_, Some(mode)) => Ok(RunMode::Output(mode)),
+            (Some(false), None) => Ok(RunMode::Background { check_status: true }),
+            (Some(true) | None, None) => Ok(RunMode::Terminal),
         }
     }
 }
 
 /// User command configuration read from runa.toml.
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(crate) struct UserCommand {
-    #[serde(skip)]
-    name: String,
+pub(crate) struct RawUserCommand {
     keys: InputKeyLists,
     cmd: InputKeyLists,
     terminal: Option<bool>,
+    output: Option<OutputMode>,
+}
+
+/// User command configuration read from runa.toml.
+#[derive(Debug)]
+pub(crate) struct UserCommand {
+    name: String,
+    keys: InputKeyLists,
+    cmd: InputKeyLists,
+    run_mode: RunMode,
+}
+
+impl<'de> Deserialize<'de> for UserCommand {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = RawUserCommand::deserialize(deserializer)?;
+        let run_mode =
+            RunMode::resolve(raw.terminal, raw.output).map_err(serde::de::Error::custom)?;
+        Ok(Self {
+            name: String::new(),
+            keys: raw.keys,
+            cmd: raw.cmd,
+            run_mode,
+        })
+    }
 }
 
 impl UserCommand {
     crate::getters! {
         name: &str,
+        run_mode: RunMode,
     }
 
     pub(crate) fn keys(&self) -> &[String] {
@@ -73,10 +110,6 @@ impl UserCommand {
 
     pub(crate) fn cmd(&self) -> &[String] {
         &self.cmd.0
-    }
-
-    pub(crate) fn run_mode(&self) -> RunMode {
-        RunMode::from_terminal(self.terminal.unwrap_or(true))
     }
 }
 
@@ -364,5 +397,32 @@ mod tests {
             expand_args(&cmd(&["7z", "x", "{path}", "-o{stem}"]), 1, path),
             expected
         );
+    }
+
+    #[test]
+    fn output_mode_resolves_terminal_conflict() {
+        assert_eq!(
+            RunMode::resolve(None, Some(OutputMode::Overlay)),
+            Ok(RunMode::Output(OutputMode::Overlay))
+        );
+        assert_eq!(
+            RunMode::resolve(Some(false), Some(OutputMode::Message)),
+            Ok(RunMode::Output(OutputMode::Message))
+        );
+        assert!(RunMode::resolve(Some(true), Some(OutputMode::Overlay)).is_err());
+
+        let parsed: Commands = toml::from_str(
+            r#"
+            status = { keys = "<m-s>", cmd = ["git", "status"], output = "overlay" }
+            push   = { keys = "<m-p>", cmd = ["git", "push"], output = "message" }
+            "#,
+        )
+        .expect("valid commands config");
+        assert_eq!(parsed.list().len(), 2);
+
+        let conflict: Result<Commands, _> = toml::from_str(
+            r#"bad = { keys = "x", cmd = "echo", terminal = true, output = "overlay" }"#,
+        );
+        assert!(conflict.is_err());
     }
 }

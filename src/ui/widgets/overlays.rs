@@ -7,7 +7,7 @@ use ratatui::{
     text::{Line, Span, Text},
 };
 
-use crate::app::AppState;
+use crate::app::{AppState, overlay_stack::CommandOutputOverlay};
 use crate::config::{
     dialog_layout::{DialogPosition, DialogSize},
     keys::InputKeys,
@@ -491,6 +491,65 @@ pub(crate) fn draw_keybind_help(frame: &mut Frame, app: &AppState, accent_style:
         border_type,
         &widgets::get_dialog_style(app, accent_style, "Keybinds", None),
         Text::from(lines),
+        Some(Alignment::Left),
+        Some(app.actions().scroll()),
+    );
+}
+
+pub(crate) fn draw_command_output(
+    frame: &mut Frame,
+    app: &AppState,
+    accent_style: Style,
+    output: &CommandOutputOverlay,
+) {
+    let area = frame.area();
+    let position = widgets::dialog_position_unified(app.config().theme().widget().position(), app);
+    let border_type = app.config().display().border_type();
+    let dim_style = Style::default().add_modifier(Modifier::DIM);
+
+    let title = if output.running() {
+        format!("{} (running...)", output.title())
+    } else if output.success() {
+        output.title().to_string()
+    } else if let Some(code) = output.exit_code() {
+        format!("{} [exit {}]", output.title(), code)
+    } else {
+        format!("{} [failed]", output.title())
+    };
+
+    let mut text = if output.running() {
+        Text::from(Line::styled("Running...", dim_style))
+    } else if output.text().lines.is_empty() {
+        Text::from(Line::styled("[No output]", dim_style))
+    } else {
+        output.text().clone()
+    };
+
+    if output.truncated() {
+        text.lines.push(Line::raw(""));
+        text.lines
+            .push(Line::styled("[Output truncated]", dim_style));
+    }
+
+    let max_line_w = text.lines.iter().map(|l| l.width()).max().unwrap_or(0);
+    let min_w = 40.min(area.width as usize);
+    let max_w = ((area.width as usize) * 85 / 100).max(min_w);
+    let width = (max_line_w + 4).clamp(min_w, max_w) as u16;
+
+    let min_h = 5.min(area.height as usize);
+    let max_h = ((area.height as usize) * 80 / 100).max(min_h);
+    let height = (text.lines.len() + 2).clamp(min_h, max_h) as u16;
+
+    widgets::draw_dialog(
+        frame,
+        DialogLayout {
+            area,
+            position,
+            size: DialogSize::Custom(width, height),
+        },
+        border_type,
+        &widgets::get_dialog_style(app, accent_style, &title, None),
+        text,
         Some(Alignment::Left),
         Some(app.actions().scroll()),
     );

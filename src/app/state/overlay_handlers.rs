@@ -8,12 +8,55 @@ use std::time::{Duration, Instant};
 use crossterm::event::{KeyCode::*, KeyEvent};
 use ratatui::layout::Alignment;
 
-use crate::app::overlay_stack::{Overlay, OverlayKind};
+use crate::app::overlay_stack::{CommandOutputOverlay, Overlay, OverlayKind};
 use crate::app::state::{AppState, KeypressResult};
 use crate::core::workers::Workers;
 
 /// AppState input and action handlers
 impl AppState {
+    pub(in crate::app) fn handle_modal_overlay_keypress(
+        &mut self,
+        key: &KeyEvent,
+    ) -> Option<KeypressResult> {
+        if !self.overlays().is_open(OverlayKind::CommandOutput) {
+            return None;
+        }
+
+        match key.code {
+            Esc | Char('q') => {
+                self.actions.scroll().reset();
+                self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
+            }
+            Up | Char('k') => self.actions.scroll().scroll_up(),
+            Down | Char('j') => self.actions.scroll().scroll_down(),
+            Left | Char('h') => self.actions.scroll().scroll_left(4),
+            Right | Char('l') => self.actions.scroll().scroll_right(4),
+            Char('0') => self.actions.scroll().reset_h(),
+            PageUp => {
+                for _ in 0..10 {
+                    self.actions.scroll().scroll_up();
+                }
+            }
+            PageDown => {
+                for _ in 0..10 {
+                    self.actions.scroll().scroll_down();
+                }
+            }
+            Home | Char('g') => self.actions.scroll().set_offset(0),
+            End | Char('G') => self.actions.scroll().scroll_to_bottom(),
+            _ => {}
+        }
+
+        Some(KeypressResult::Consumed)
+    }
+
+    pub(super) fn open_command_output(&mut self, id: u64, title: String) {
+        self.actions.scroll().reset();
+        self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
+        self.overlays_mut().push(Overlay::CommandOutput(Box::new(
+            CommandOutputOverlay::new_running(id, title),
+        )));
+    }
     pub(in crate::app) fn handle_esc_close_overlays(
         &mut self,
         key: &KeyEvent,

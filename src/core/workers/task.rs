@@ -75,11 +75,18 @@ pub(crate) struct MetadataTask {
     pub(crate) tab_id: Option<usize>,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum CommandMode {
+    Background { check_status: bool },
+    Message,
+    Overlay { id: u64, tab_id: Option<usize> },
+}
+
 pub(crate) struct CommandTask {
     pub(crate) program: PathBuf,
     pub(crate) args: Vec<OsString>,
     pub(crate) dir: Option<PathBuf>,
-    pub(crate) check_status: bool,
+    pub(crate) mode: CommandMode,
 }
 
 /// Supported file system operations the worker can perform.

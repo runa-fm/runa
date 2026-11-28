@@ -8,12 +8,24 @@
 use std::{slice, time::Instant};
 
 use ratatui::layout::Alignment;
+use ratatui::text::Text;
+
+pub(crate) struct CommandOutputOverlay {
+    id: u64,
+    title: String,
+    text: Text<'static>,
+    running: bool,
+    success: bool,
+    exit_code: Option<i32>,
+    truncated: bool,
+}
 
 pub(crate) enum Overlay {
     ShowInfo,
     Message { text: String, alignment: Alignment },
     PrefixHelp,
     KeybindHelp,
+    CommandOutput(Box<CommandOutputOverlay>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -22,6 +34,7 @@ pub(crate) enum OverlayKind {
     Message,
     PrefixHelp,
     KeybindHelp,
+    CommandOutput,
 }
 
 pub(crate) struct OverlayStack {
@@ -33,6 +46,44 @@ pub(crate) struct SharedOverlays {
     notification_time: Option<Instant>,
 }
 
+impl CommandOutputOverlay {
+    pub(crate) fn new_running(id: u64, title: String) -> Self {
+        Self {
+            id,
+            title,
+            text: Text::default(),
+            running: true,
+            success: true,
+            exit_code: None,
+            truncated: false,
+        }
+    }
+
+    pub(crate) fn finish(
+        &mut self,
+        text: Text<'static>,
+        success: bool,
+        exit_code: Option<i32>,
+        truncated: bool,
+    ) {
+        self.text = text;
+        self.running = false;
+        self.success = success;
+        self.exit_code = exit_code;
+        self.truncated = truncated;
+    }
+
+    crate::getters! {
+        id: u64,
+        title: &str,
+        text: &Text<'static>,
+        running: bool,
+        success: bool,
+        exit_code: Option<i32>,
+        truncated: bool,
+    }
+}
+
 impl Overlay {
     pub(crate) const fn kind(&self) -> OverlayKind {
         match self {
@@ -40,13 +91,14 @@ impl Overlay {
             Overlay::Message { .. } => OverlayKind::Message,
             Overlay::PrefixHelp => OverlayKind::PrefixHelp,
             Overlay::KeybindHelp => OverlayKind::KeybindHelp,
+            Overlay::CommandOutput(_) => OverlayKind::CommandOutput,
         }
     }
 
     pub(crate) fn is_tab_shared(&self) -> bool {
         match self {
             Overlay::ShowInfo | Overlay::Message { .. } => true,
-            Overlay::PrefixHelp | Overlay::KeybindHelp => false,
+            Overlay::PrefixHelp | Overlay::KeybindHelp | Overlay::CommandOutput(_) => false,
         }
     }
 }
@@ -96,8 +148,15 @@ impl OverlayStack {
     pub(crate) fn needs_scroll(&self) -> bool {
         matches!(
             self.top(),
-            Some(Overlay::ShowInfo) | Some(Overlay::KeybindHelp)
+            Some(Overlay::ShowInfo) | Some(Overlay::KeybindHelp) | Some(Overlay::CommandOutput(_))
         )
+    }
+
+    pub(crate) fn find_command_output_mut(&mut self, id: u64) -> Option<&mut CommandOutputOverlay> {
+        self.overlays.iter_mut().find_map(|o| match o {
+            Overlay::CommandOutput(out) if out.id() == id => Some(out.as_mut()),
+            _ => None,
+        })
     }
 
     pub(crate) fn take_shared(

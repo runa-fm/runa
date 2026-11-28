@@ -230,6 +230,15 @@ pub(crate) enum WorkerResponse {
         request_id: u64,
         tab_id: Option<usize>,
     },
+    CommandOutput {
+        id: u64,
+        lines: Vec<String>,
+        success: bool,
+        exit_code: Option<i32>,
+        truncated: bool,
+        tab_id: Option<usize>,
+    },
+    Message(String),
     ConfigChanged,
     DirsChanged {
         dirs: Vec<PathBuf>,
@@ -251,6 +260,7 @@ impl WorkerResponse {
             WorkerResponse::PreviewLoaded { tab_id, .. } => *tab_id,
             WorkerResponse::FindResults { tab_id, .. } => *tab_id,
             WorkerResponse::FileMetadataLoaded { tab_id, .. } => *tab_id,
+            WorkerResponse::CommandOutput { tab_id, .. } => *tab_id,
             _ => None,
         }
     }

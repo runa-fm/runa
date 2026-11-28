@@ -15,6 +15,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use crossterm::{
@@ -26,12 +27,15 @@ use crate::app::{
     Clipboard,
     actions::{ActionMode, InputMode},
     keymap::FileAction,
+    overlay_stack::OverlayKind,
     state::{AppState, KeypressResult},
 };
-use crate::config::commands::{self, RunMode};
+use crate::config::commands::{self, OutputMode, RunMode};
 use crate::config::editor::EditorCommand;
-use crate::core::workers::{CommandTask, Workers};
+use crate::core::workers::{CommandMode, CommandTask, Workers};
 use crate::utils::{path, timings};
+
+static NEXT_COMMAND_ID: AtomicU64 = AtomicU64::new(1);
 
 /// AppState file action handlers
 impl AppState {
@@ -119,7 +123,7 @@ impl AppState {
                 return KeypressResult::Continue;
             };
 
-            self.launch(workers, program, args, dir, run_mode, focus)
+            self.launch(workers, program, args, dir, run_mode, focus, None)
         } else {
             KeypressResult::Continue
         }
@@ -402,11 +406,21 @@ impl AppState {
             return KeypressResult::Continue;
         };
 
-        self.launch(workers, program, args, dir, run_mode, selected)
+        let title = user_command.name().to_owned();
+        self.launch(
+            workers,
+            program,
+            args,
+            dir,
+            run_mode,
+            selected,
+            Some(&title),
+        )
     }
 
     /// Starts a resolved command in its working directory.
     /// After a terminal command, reloads the directory and keeps `focus` selected.
+    #[allow(clippy::too_many_arguments)]
     fn launch(
         &mut self,
         workers: &Workers,
@@ -415,11 +429,41 @@ impl AppState {
         cwd: PathBuf,
         run_mode: RunMode,
         focus: Option<OsString>,
+        title: Option<&str>,
     ) -> KeypressResult {
         match run_mode {
             RunMode::Background { check_status } => {
-                self.run_in_background(workers, program, args, cwd, check_status);
+                self.run_in_background(
+                    workers,
+                    program,
+                    args,
+                    cwd,
+                    CommandMode::Background { check_status },
+                );
                 KeypressResult::Continue
+            }
+            RunMode::Output(OutputMode::Message) => {
+                self.run_in_background(workers, program, args, cwd, CommandMode::Message);
+                KeypressResult::Continue
+            }
+            RunMode::Output(OutputMode::Overlay) => {
+                let id = NEXT_COMMAND_ID.fetch_add(1, Ordering::Relaxed);
+                let label = title.map(str::to_owned).unwrap_or_else(|| {
+                    program
+                        .file_stem()
+                        .unwrap_or(program.as_os_str())
+                        .to_string_lossy()
+                        .into_owned()
+                });
+                self.open_command_output(id, label);
+                let mode = CommandMode::Overlay {
+                    id,
+                    tab_id: self.tab_id(),
+                };
+                if !self.run_in_background(workers, program, args, cwd, mode) {
+                    self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
+                }
+                KeypressResult::Consumed
             }
             RunMode::Terminal => match Self::run_in_terminal(&program, args, &cwd) {
                 Ok(_) => {
@@ -435,25 +479,27 @@ impl AppState {
         }
     }
 
-    /// Runs an editor command in the background, so the TUI keeps running.
+    /// Runs a command in the background runner worker, returning false if the runner is unavailable.
     fn run_in_background(
         &mut self,
         workers: &Workers,
         program: PathBuf,
         args: Vec<OsString>,
         cwd: PathBuf,
-        check_status: bool,
-    ) {
+        mode: CommandMode,
+    ) -> bool {
         let task = CommandTask {
             program,
             args,
             dir: Some(cwd),
-            check_status,
+            mode,
         };
         if workers.runner_tx().send(task).is_err() {
             let msg = "Command runner is not running";
             self.push_overlay_message(msg, timings::message::DEFAULT);
+            return false;
         }
+        true
     }
 
     /// Opens a specified path/file in the configured editor ("nvim" or "vim" etc.).

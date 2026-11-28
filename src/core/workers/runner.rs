@@ -10,10 +10,13 @@ use std::thread;
 
 use crossbeam_channel::{Receiver, Sender};
 
-use crate::core::workers::{CommandTask, WorkerResponse};
+use crate::core::workers::{CommandMode, CommandTask, WorkerResponse};
 
 /// Bytes of stderr kept for the error message.
-const STDERR_KEEP_BYTES: u64 = 4096;
+const MESSAGE_KEEP_BYTES: u64 = 4096;
+
+// Max bytes kept per stream for the overlay output.
+const OVERLAY_MAX_BYTES: u64 = 128 * 1024;
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -24,7 +27,7 @@ pub(super) fn start(task_rx: Receiver<CommandTask>, res_tx: Sender<WorkerRespons
             program,
             args,
             dir,
-            check_status,
+            mode,
         }) = task_rx.recv()
         {
             let name = program
@@ -33,17 +36,37 @@ pub(super) fn start(task_rx: Receiver<CommandTask>, res_tx: Sender<WorkerRespons
                 .to_string_lossy()
                 .into_owned();
 
-            match spawn(&program, &args, dir.as_deref(), check_status) {
+            match spawn(&program, &args, dir.as_deref(), mode) {
                 Ok(child) => {
                     let res_tx = res_tx.clone();
-                    thread::spawn(move || wait_for(child, &name, check_status, &res_tx));
+                    thread::spawn(move || wait_for(child, &name, mode, &res_tx));
                 }
-                Err(e) => {
-                    let _ = res_tx.send(WorkerResponse::Error(format!("{name}: {e}")));
-                }
+                Err(e) => send_spawn_error(&name, e, mode, &res_tx),
             }
         }
     });
+}
+
+fn send_spawn_error(
+    name: &str,
+    err: io::Error,
+    mode: CommandMode,
+    res_tx: &Sender<WorkerResponse>,
+) {
+    let msg = format!("{name}: {err}");
+
+    let respone = match mode {
+        CommandMode::Overlay { id, tab_id } => WorkerResponse::CommandOutput {
+            id,
+            lines: vec![msg],
+            success: false,
+            exit_code: None,
+            truncated: false,
+            tab_id,
+        },
+        CommandMode::Background { .. } | CommandMode::Message => WorkerResponse::Error(msg),
+    };
+    let _ = res_tx.send(respone);
 }
 
 /// Spawns the command without any access to the terminal.
@@ -51,19 +74,21 @@ fn spawn(
     program: &Path,
     args: &[OsString],
     dir: Option<&Path>,
-    check_status: bool,
+    mode: CommandMode,
 ) -> io::Result<Child> {
-    let stderr = if check_status {
-        Stdio::piped()
-    } else {
-        Stdio::null()
+    let (stdout, stderr) = match mode {
+        CommandMode::Background {
+            check_status: false,
+        } => (Stdio::null(), Stdio::null()),
+        CommandMode::Background { check_status: true } => (Stdio::null(), Stdio::piped()),
+        CommandMode::Message | CommandMode::Overlay { .. } => (Stdio::piped(), Stdio::piped()),
     };
 
     let mut command = Command::new(program);
     command
         .args(args)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
+        .stdout(stdout)
         .stderr(stderr);
 
     if let Some(dir) = dir {
@@ -79,32 +104,132 @@ fn spawn(
     command.spawn()
 }
 
-/// Waits for the command and reports a failure with the first line of its stderr.
-fn wait_for(mut child: Child, name: &str, check_status: bool, res_tx: &Sender<WorkerResponse>) {
-    let mut head = Vec::new();
-    if let Some(mut stderr) = child.stderr.take() {
-        let _ = stderr
-            .by_ref()
-            .take(STDERR_KEEP_BYTES)
-            .read_to_end(&mut head);
+/// Read up to limit bytes and drains the rest.
+fn read_capped(mut reader: impl Read, limit: u64) -> (Vec<u8>, bool) {
+    let mut buf = Vec::new();
+    let _ = reader.by_ref().take(limit).read_to_end(&mut buf);
+    let drained = io::copy(&mut reader, &mut io::sink()).unwrap_or(0);
+    (buf, drained > 0)
+}
 
-        // Drain the rest
-        let _ = io::copy(&mut stderr, &mut io::sink());
+fn first_non_empty_line(bytes: &[u8]) -> Option<String> {
+    String::from_utf8_lossy(bytes)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_owned)
+}
+
+fn capture_streams(child: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
+    let stderr_handle = child
+        .stderr
+        .take()
+        .map(|stderr| thread::spawn(move || read_capped(stderr, limit)));
+
+    let (stdout_buf, stdout_trunc) = child
+        .stdout
+        .take()
+        .map(|stdout| read_capped(stdout, limit))
+        .unwrap_or_default();
+
+    let (stderr_buf, stderr_trunc) = stderr_handle
+        .and_then(|h| h.join().ok())
+        .unwrap_or_default();
+
+    (stdout_buf, stderr_buf, stdout_trunc || stderr_trunc)
+}
+
+fn build_overlay_lines(stdout: &[u8], stderr: &[u8]) -> Vec<String> {
+    let mut lines: Vec<String> = String::from_utf8_lossy(stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+
+    let stderr_lines: Vec<String> = String::from_utf8_lossy(stderr)
+        .lines()
+        .map(str::to_owned)
+        .collect();
+
+    if !stderr_lines.is_empty() {
+        if !lines.is_empty() {
+            lines.push(String::new());
+        }
+
+        lines.extend(stderr_lines);
     }
 
-    let message = match child.wait() {
-        Ok(_) if !check_status => return,
-        Ok(status) if status.success() => return,
-        Ok(status) => {
-            let stderr = String::from_utf8_lossy(&head);
-            match stderr.lines().map(str::trim).find(|line| !line.is_empty()) {
-                Some(line) => format!("{name}: {status}: {line}"),
-                None => format!("{name}: {status}"),
-            }
+    lines
+}
+
+/// Waits for the command and reports a failure with the first line of its stderr.
+fn wait_for(mut child: Child, name: &str, mode: CommandMode, res_tx: &Sender<WorkerResponse>) {
+    match mode {
+        CommandMode::Background { check_status } => {
+            let (stderr, _) = child
+                .stderr
+                .take()
+                .map(|s| read_capped(s, MESSAGE_KEEP_BYTES))
+                .unwrap_or_default();
+
+            let message = match child.wait() {
+                Ok(_) if !check_status => return,
+                Ok(status) if status.success() => return,
+                Ok(status) => match first_non_empty_line(&stderr) {
+                    Some(line) => format!("{name}: {status}: {line}"),
+                    None => format!("{name}: {status}"),
+                },
+                Err(e) => format!("{name}: {e}"),
+            };
+
+            let _ = res_tx.send(WorkerResponse::Error(message));
         }
-        Err(e) => format!("{name}: {e}"),
-    };
-    let _ = res_tx.send(WorkerResponse::Error(message));
+        CommandMode::Message => {
+            let (stdout, stderr, _) = capture_streams(&mut child, MESSAGE_KEEP_BYTES);
+
+            let response = match child.wait() {
+                Ok(status) if status.success() => {
+                    let line =
+                        first_non_empty_line(&stdout).or_else(|| first_non_empty_line(&stderr));
+                    let msg = match line {
+                        Some(line) => format!("{name}: {line}"),
+                        None => format!("{name}: done"),
+                    };
+                    WorkerResponse::Message(msg)
+                }
+                Ok(status) => {
+                    let line =
+                        first_non_empty_line(&stderr).or_else(|| first_non_empty_line(&stdout));
+                    let msg = match line {
+                        Some(line) => format!("{name}: {status}: {line}"),
+                        None => format!("{name}: {status}"),
+                    };
+                    WorkerResponse::Error(msg)
+                }
+                Err(e) => WorkerResponse::Error(format!("{name}: {e}")),
+            };
+            let _ = res_tx.send(response);
+        }
+        CommandMode::Overlay { id, tab_id } => {
+            let (stdout, stderr, truncated) = capture_streams(&mut child, OVERLAY_MAX_BYTES);
+            let (lines, success, exit_code) = match child.wait() {
+                Ok(status) => (
+                    build_overlay_lines(&stdout, &stderr),
+                    status.success(),
+                    status.code(),
+                ),
+                Err(e) => (vec![format!("{name}: {e}")], false, None),
+            };
+
+            let _ = res_tx.send(WorkerResponse::CommandOutput {
+                id,
+                lines,
+                success,
+                exit_code,
+                truncated,
+                tab_id,
+            });
+        }
+    }
 }
 
 #[cfg(test)]
@@ -119,10 +244,10 @@ mod tests {
 
     const TIMEOUT: Duration = Duration::from_secs(5);
 
-    fn run(
+    fn run_mode(
         program: &str,
         args: &[&str],
-        check_status: bool,
+        mode: CommandMode,
     ) -> (Receiver<WorkerResponse>, TempDir) {
         let dir = tempdir().expect("temp dir is created");
         let (task_tx, task_rx) = unbounded();
@@ -132,10 +257,18 @@ mod tests {
             program: PathBuf::from(program),
             args: args.iter().map(OsString::from).collect(),
             dir: Some(dir.path().to_path_buf()),
-            check_status,
+            mode,
         };
         task_tx.send(task).expect("runner thread is running");
         (res_rx, dir)
+    }
+
+    fn run(
+        program: &str,
+        args: &[&str],
+        check_status: bool,
+    ) -> (Receiver<WorkerResponse>, TempDir) {
+        run_mode(program, args, CommandMode::Background { check_status })
     }
 
     fn error_message(res_rx: &Receiver<WorkerResponse>) -> String {
@@ -218,5 +351,73 @@ mod tests {
     fn missing_program_reports_its_name() {
         let (res_rx, _dir) = run("runa-no-such-program", &[], false);
         assert!(error_message(&res_rx).starts_with("runa-no-such-program: "));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn message_mode_reports_stdout_or_stderr() {
+        let (res_rx, _dir) = run_mode("sh", &["-c", "echo pushed >&2"], CommandMode::Message);
+        match res_rx.recv_timeout(TIMEOUT) {
+            Ok(WorkerResponse::Message(msg)) => assert_eq!(msg, "sh: pushed"),
+            other => panic!("expected message, got {other:?}"),
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overlay_mode_captures_stdout_and_stderr() {
+        let (res_rx, _dir) = run_mode(
+            "sh",
+            &["-c", "echo out; echo err >&2"],
+            CommandMode::Overlay {
+                id: 7,
+                tab_id: Some(1),
+            },
+        );
+        match res_rx.recv_timeout(TIMEOUT) {
+            Ok(WorkerResponse::CommandOutput {
+                id,
+                lines,
+                success,
+                exit_code,
+                truncated,
+                tab_id,
+            }) => {
+                assert_eq!(id, 7);
+                assert_eq!(tab_id, Some(1));
+                assert!(success);
+                assert_eq!(exit_code, Some(0));
+                assert!(!truncated);
+                assert_eq!(lines, vec!["out", "", "err"]);
+            }
+            other => panic!("expected command output, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn overlay_mode_missing_program_still_responds() {
+        let (res_rx, _dir) = run_mode(
+            "runa-no-such-program",
+            &[],
+            CommandMode::Overlay {
+                id: 9,
+                tab_id: None,
+            },
+        );
+        match res_rx.recv_timeout(TIMEOUT) {
+            Ok(WorkerResponse::CommandOutput {
+                id,
+                lines,
+                success,
+                exit_code,
+                ..
+            }) => {
+                assert_eq!(id, 9);
+                assert!(!success);
+                assert_eq!(exit_code, None);
+                assert!(lines[0].starts_with("runa-no-such-program: "));
+            }
+            other => panic!("expected command output, got {other:?}"),
+        }
     }
 }

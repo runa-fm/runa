@@ -8,7 +8,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
-use crate::config::commands::{self, LAST_EXTENSION, RunMode};
+use crate::config::commands::{self, LAST_EXTENSION, OutputMode, RunMode};
 use crate::config::keys::InputKeyLists;
 
 /// An editor command and whether it takes over the terminal.
@@ -24,6 +24,7 @@ struct EditorEntry {
 struct EditorTable {
     cmd: InputKeyLists,
     terminal: Option<bool>,
+    output: Option<OutputMode>,
 }
 
 impl<'de> Deserialize<'de> for EditorEntry {
@@ -45,7 +46,8 @@ impl<'de> Deserialize<'de> for EditorEntry {
             },
             Entry::Table(table) => EditorEntry {
                 args: table.cmd.0,
-                run_mode: RunMode::from_terminal(table.terminal.unwrap_or(true)),
+                run_mode: RunMode::resolve(table.terminal, table.output)
+                    .map_err(serde::de::Error::custom)?,
             },
         })
     }
@@ -159,7 +161,11 @@ mod tests {
     fn program(args: &[String], terminal: bool, ext_parts: usize) -> EditorCommand<'_> {
         EditorCommand::Program {
             args,
-            run_mode: RunMode::from_terminal(terminal),
+            run_mode: if terminal {
+                RunMode::Terminal
+            } else {
+                RunMode::Background { check_status: true }
+            },
             ext_parts,
         }
     }
