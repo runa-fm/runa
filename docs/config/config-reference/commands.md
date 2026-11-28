@@ -11,7 +11,7 @@ The `[commands]` section binds programs to keys. Each command has a name, the ke
 lazygit = { keys = "<m-g>", cmd = "lazygit" }
 extract = { keys = "x", cmd = ["7z", "x", "-o{unused_stem}", "{path}"], terminal = false }
 status  = { keys = "<m-s>", cmd = ["git", "status"], output = "overlay" }
-push    = { keys = "<m-p>", cmd = ["git", "push"], output = "message" }
+branch  = { keys = "<m-b>", cmd = ["git", "status", "-sb"], output = "message" }
 ```
 
 ## Options
@@ -48,10 +48,10 @@ Cannot be set to `true` together with `output`.
 
 Runs the command in the background and shows its stdout and stderr inside runa with ANSI color support:
 
-- `"overlay"` — Opens a scrollable modal overlay showing the command's output. Scroll with `j`/`k` or `Up`/`Down`, `PgUp`/`PgDn`, `g`/`G` or `Home`/`End`, pan horizontally with `h`/`l` or `Left`/`Right` (`0` resets horizontal scroll), and close with `q` or `Esc`.
-- `"message"` — Shows up to 12 lines of output in a timed notification message.
+- `"overlay"` — Opens a scrollable modal overlay showing the command's output. Scroll with `j`/`k` or `Up`/`Down`, `PgUp`/`PgDn`, `g`/`G` or `Home`/`End`, pan horizontally with `h`/`l` or `Left`/`Right` (`0` resets horizontal scroll), and close with `q` or `Esc`. Closing the overlay while the command is still running stops it.
+- `"message"` — Shows up to 12 lines of output in a timed notification message once the command exits. Intended for finite commands.
 
-Setting `output` implies running in the background (`terminal = false`).
+Setting `output` implies running in the background (`terminal = false`). Commands that may prompt for passwords or passphrases (such as `git push` without a credential helper or unlocked SSH agent, `ssh`, or `sudo`) should run in the terminal instead (omit `output` and keep `terminal = true`).
 
 ## Working Directory
 

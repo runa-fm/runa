@@ -173,12 +173,13 @@ impl TabManager {
         idx < self.tabs.len() && self.select(idx)
     }
 
-    fn close_tab(&mut self, idx: usize) -> bool {
+    fn close_tab(&mut self, idx: usize, workers: &Workers) -> bool {
         if idx >= self.tabs.len() {
             return !self.tabs.is_empty();
         }
 
         let mut removed = self.tabs.remove(idx);
+        removed.close_command_output(workers);
         if self.tabs.is_empty() {
             self.current = 0;
             false
@@ -256,7 +257,7 @@ pub(crate) fn handle_tab_action(
             match container {
                 AppContainer::Single(_) => {}
                 AppContainer::Tabs(tab) => {
-                    tab.close_tab(tab.current);
+                    tab.close_tab(tab.current, workers);
                     if tab.len() == 1 {
                         let last = tab.tabs.remove(0);
                         *container = AppContainer::Single(Box::new(last));

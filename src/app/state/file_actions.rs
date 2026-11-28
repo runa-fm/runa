@@ -27,7 +27,6 @@ use crate::app::{
     Clipboard,
     actions::{ActionMode, InputMode},
     keymap::FileAction,
-    overlay_stack::OverlayKind,
     state::{AppState, KeypressResult},
 };
 use crate::config::commands::{self, OutputMode, RunMode};
@@ -457,13 +456,13 @@ impl AppState {
                         .to_string_lossy()
                         .into_owned()
                 });
-                self.open_command_output(id, label);
+                self.open_command_output(id, label, workers);
                 let mode = CommandMode::Overlay {
                     id,
                     tab_id: self.tab_id(),
                 };
                 if !self.run_in_background(workers, program, args, cwd, mode) {
-                    self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
+                    self.close_command_output(workers);
                 }
                 KeypressResult::Consumed
             }
@@ -496,7 +495,7 @@ impl AppState {
             dir: Some(cwd),
             mode,
         };
-        if workers.runner_tx().send(task).is_err() {
+        if !workers.run_command(task) {
             let msg = "Command runner is not running";
             self.push_overlay_message(msg, timings::message::DEFAULT);
             return false;

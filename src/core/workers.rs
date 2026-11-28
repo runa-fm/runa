@@ -58,7 +58,7 @@ pub(crate) struct Workers {
 
     fileop_tx: Sender<FileOperation>,
 
-    runner_tx: Sender<CommandTask>,
+    runner_tx: Sender<RunnerCommand>,
     watch_cmd_tx: Sender<WatchCommand>,
 
     response_rx: Receiver<WorkerResponse>,
@@ -107,7 +107,7 @@ impl Workers {
         let (find_tx, find_rx) = bounded::<FindTask>(1);
 
         let (fileop_tx, fileop_rx) = unbounded::<FileOperation>();
-        let (runner_tx, runner_rx) = unbounded::<CommandTask>();
+        let (runner_tx, runner_rx) = unbounded::<RunnerCommand>();
         let (watch_cmd_tx, watch_cmd_rx) = unbounded::<WatchCommand>();
 
         let (res_tx, response_rx) = unbounded::<WorkerResponse>();
@@ -155,7 +155,6 @@ impl Workers {
         preview_file_tx: &Sender<PreviewTask>,
         metadata_tx: &Sender<MetadataTask>,
         fileop_tx: &Sender<FileOperation>,
-        runner_tx: &Sender<CommandTask>,
         response_rx: &Receiver<WorkerResponse>,
         active_fileops: &Arc<AtomicUsize>,
     }
@@ -185,6 +184,14 @@ impl Workers {
 
     pub(crate) fn send_find(&self, task: FindTask) {
         send_newest(&self.find_tx, &self.find_queue, task);
+    }
+
+    pub(crate) fn run_command(&self, task: CommandTask) -> bool {
+        self.runner_tx.send(RunnerCommand::Run(task)).is_ok()
+    }
+
+    pub(crate) fn cancel_command(&self, id: u64) {
+        let _ = self.runner_tx.send(RunnerCommand::Cancel(id));
     }
 
     pub(crate) fn retarget_watch(&self, dirs: Vec<PathBuf>) {

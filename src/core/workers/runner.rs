@@ -2,15 +2,18 @@
 //!
 //! Runs editor commands that do not need the terminal, so the TUI keeps running.
 
+use std::collections::HashMap;
 use std::ffi::OsString;
 use std::io::{self, Read};
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{Receiver, RecvTimeoutError, Sender, bounded, never, select};
 
-use crate::core::workers::{CommandMode, CommandTask, WorkerResponse};
+use crate::core::workers::{CommandMode, CommandTask, RunnerCommand, WorkerResponse};
 
 /// Bytes of stderr kept for the error message.
 const MESSAGE_KEEP_BYTES: u64 = 4096;
@@ -21,31 +24,78 @@ const MESSAGE_MAX_LINES: usize = 12;
 // Max bytes kept per stream for the overlay output.
 const OVERLAY_MAX_BYTES: u64 = 128 * 1024;
 
+const CANCEL_POLL: Duration = Duration::from_millis(25);
+
+type ActiveMap = Arc<Mutex<HashMap<u64, Sender<()>>>>;
+
+struct ActiveCommandGuard {
+    id: u64,
+    active: ActiveMap,
+}
+
+impl Drop for ActiveCommandGuard {
+    fn drop(&mut self) {
+        if let Ok(mut map) = self.active.lock() {
+            map.remove(&self.id);
+        }
+    }
+}
+
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-pub(super) fn start(task_rx: Receiver<CommandTask>, res_tx: Sender<WorkerResponse>) {
+pub(super) fn start(cmd_rx: Receiver<RunnerCommand>, res_tx: Sender<WorkerResponse>) {
     thread::spawn(move || {
-        while let Ok(CommandTask {
-            program,
-            args,
-            dir,
-            mode,
-        }) = task_rx.recv()
-        {
-            let name = program
-                .file_stem()
-                .unwrap_or(program.as_os_str())
-                .to_string_lossy()
-                .into_owned();
+        let active: ActiveMap = Arc::new(Mutex::new(HashMap::new()));
 
-            match spawn(&program, &args, dir.as_deref(), mode) {
-                Ok(child) => {
-                    let res_tx = res_tx.clone();
-                    thread::spawn(move || wait_for(child, &name, mode, &res_tx));
+        while let Ok(cmd) = cmd_rx.recv() {
+            match cmd {
+                RunnerCommand::Run(CommandTask {
+                    program,
+                    args,
+                    dir,
+                    mode,
+                }) => {
+                    let name = program
+                        .file_stem()
+                        .unwrap_or(program.as_os_str())
+                        .to_string_lossy()
+                        .into_owned();
+
+                    match spawn(&program, &args, dir.as_deref(), mode) {
+                        Ok(child) => {
+                            let cancel = match mode {
+                                CommandMode::Overlay { id, .. } => {
+                                    let (cancel_tx, cancel_rx) = bounded(0);
+                                    if let Ok(mut map) = active.lock() {
+                                        map.insert(id, cancel_tx);
+                                    }
+                                    Some((
+                                        cancel_rx,
+                                        ActiveCommandGuard {
+                                            id,
+                                            active: Arc::clone(&active),
+                                        },
+                                    ))
+                                }
+                                CommandMode::Background { .. } | CommandMode::Message => None,
+                            };
+                            let res_tx = res_tx.clone();
+                            thread::spawn(move || wait_for(child, &name, mode, cancel, &res_tx));
+                        }
+                        Err(e) => send_spawn_error(&name, e, mode, &res_tx),
+                    }
                 }
-                Err(e) => send_spawn_error(&name, e, mode, &res_tx),
+                RunnerCommand::Cancel(id) => {
+                    if let Ok(mut map) = active.lock() {
+                        map.remove(&id);
+                    }
+                }
             }
+        }
+
+        if let Ok(mut map) = active.lock() {
+            map.clear();
         }
     });
 }
@@ -58,7 +108,7 @@ fn send_spawn_error(
 ) {
     let msg = format!("{name}: {err}");
 
-    let respone = match mode {
+    let response = match mode {
         CommandMode::Overlay { id, tab_id } => WorkerResponse::CommandOutput {
             id,
             lines: vec![msg],
@@ -69,10 +119,11 @@ fn send_spawn_error(
         },
         CommandMode::Background { .. } | CommandMode::Message => WorkerResponse::Error(msg),
     };
-    let _ = res_tx.send(respone);
+    let _ = res_tx.send(response);
 }
 
-/// Spawns the command without any access to the terminal.
+/// Spawns a non-terminal command with null stdin and configured stdio.
+/// On Unix, child processes may still open `/dev/tty`, so common prompt env vars are disabled for output modes.
 fn spawn(
     program: &Path,
     args: &[OsString],
@@ -96,6 +147,12 @@ fn spawn(
 
     if let Some(dir) = dir {
         command.current_dir(dir);
+    }
+
+    if matches!(mode, CommandMode::Message | CommandMode::Overlay { .. }) {
+        command
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GCM_INTERACTIVE", "never");
     }
 
     #[cfg(windows)]
@@ -165,6 +222,78 @@ fn capture_streams(child: &mut Child, limit: u64) -> (Vec<u8>, Vec<u8>, bool) {
     (stdout_buf, stderr_buf, stdout_trunc || stderr_trunc)
 }
 
+fn capture_streams_cancellable(
+    child: &mut Child,
+    limit: u64,
+    cancel: &Receiver<()>,
+) -> Option<(Vec<u8>, Vec<u8>, bool)> {
+    let out_rx = child.stdout.take().map(|stdout| {
+        let (tx, rx) = bounded(1);
+        thread::spawn(move || {
+            let _ = tx.send(read_capped(stdout, limit));
+        });
+        rx
+    });
+    let err_rx = child.stderr.take().map(|stderr| {
+        let (tx, rx) = bounded(1);
+        thread::spawn(move || {
+            let _ = tx.send(read_capped(stderr, limit));
+        });
+        rx
+    });
+
+    let idle = never::<(Vec<u8>, bool)>();
+    let mut stdout = out_rx.is_none().then(Default::default);
+    let mut stderr = err_rx.is_none().then(Default::default);
+
+    while stdout.is_none() || stderr.is_none() {
+        let out_sel = match (&out_rx, &stdout) {
+            (Some(rx), None) => rx,
+            _ => &idle,
+        };
+        let err_sel = match (&err_rx, &stderr) {
+            (Some(rx), None) => rx,
+            _ => &idle,
+        };
+
+        select! {
+            recv(cancel) -> _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            recv(out_sel) -> res => {
+                stdout = Some(res.unwrap_or_default());
+            }
+            recv(err_sel) -> res => {
+                stderr = Some(res.unwrap_or_default());
+            }
+        }
+    }
+
+    let (stdout_buf, stdout_trunc) = stdout.unwrap_or_default();
+    let (stderr_buf, stderr_trunc) = stderr.unwrap_or_default();
+    Some((stdout_buf, stderr_buf, stdout_trunc || stderr_trunc))
+}
+
+fn wait_cancellable(child: &mut Child, cancel: &Receiver<()>) -> Option<io::Result<ExitStatus>> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => return Some(Ok(status)),
+            Ok(None) => {}
+            Err(e) => return Some(Err(e)),
+        }
+        match cancel.recv_timeout(CANCEL_POLL) {
+            Ok(()) | Err(RecvTimeoutError::Disconnected) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+            Err(RecvTimeoutError::Timeout) => {}
+        }
+    }
+}
+
 fn build_overlay_lines(stdout: &[u8], stderr: &[u8]) -> Vec<String> {
     let mut lines: Vec<String> = String::from_utf8_lossy(stdout)
         .lines()
@@ -188,7 +317,13 @@ fn build_overlay_lines(stdout: &[u8], stderr: &[u8]) -> Vec<String> {
 }
 
 /// Waits for the command and reports a failure with the first line of its stderr.
-fn wait_for(mut child: Child, name: &str, mode: CommandMode, res_tx: &Sender<WorkerResponse>) {
+fn wait_for(
+    mut child: Child,
+    name: &str,
+    mode: CommandMode,
+    cancel: Option<(Receiver<()>, ActiveCommandGuard)>,
+    res_tx: &Sender<WorkerResponse>,
+) {
     match mode {
         CommandMode::Background { check_status } => {
             let (stderr, _) = child
@@ -234,8 +369,22 @@ fn wait_for(mut child: Child, name: &str, mode: CommandMode, res_tx: &Sender<Wor
             let _ = res_tx.send(response);
         }
         CommandMode::Overlay { id, tab_id } => {
-            let (stdout, stderr, truncated) = capture_streams(&mut child, OVERLAY_MAX_BYTES);
-            let (lines, success, exit_code) = match child.wait() {
+            let (stdout, stderr, truncated, status) = if let Some((cancel_rx, _guard)) = cancel {
+                let Some((stdout, stderr, truncated)) =
+                    capture_streams_cancellable(&mut child, OVERLAY_MAX_BYTES, &cancel_rx)
+                else {
+                    return;
+                };
+                let Some(status) = wait_cancellable(&mut child, &cancel_rx) else {
+                    return;
+                };
+                (stdout, stderr, truncated, status)
+            } else {
+                let (stdout, stderr, truncated) = capture_streams(&mut child, OVERLAY_MAX_BYTES);
+                (stdout, stderr, truncated, child.wait())
+            };
+
+            let (lines, success, exit_code) = match status {
                 Ok(status) => (
                     build_overlay_lines(&stdout, &stderr),
                     status.success(),
@@ -261,29 +410,39 @@ mod tests {
     use super::*;
 
     use std::path::PathBuf;
-    use std::time::Duration;
 
-    use crossbeam_channel::{RecvTimeoutError, unbounded};
+    use crossbeam_channel::unbounded;
     use tempfile::{TempDir, tempdir};
 
     const TIMEOUT: Duration = Duration::from_secs(5);
+
+    fn start_runner() -> (Sender<RunnerCommand>, Receiver<WorkerResponse>, TempDir) {
+        let dir = tempdir().expect("temp dir is created");
+        let (cmd_tx, cmd_rx) = unbounded();
+        let (res_tx, res_rx) = unbounded();
+        start(cmd_rx, res_tx);
+        (cmd_tx, res_rx, dir)
+    }
+
+    fn make_task(program: &str, args: &[&str], dir: &Path, mode: CommandMode) -> CommandTask {
+        CommandTask {
+            program: PathBuf::from(program),
+            args: args.iter().map(OsString::from).collect(),
+            dir: Some(dir.to_path_buf()),
+            mode,
+        }
+    }
 
     fn run_mode(
         program: &str,
         args: &[&str],
         mode: CommandMode,
     ) -> (Receiver<WorkerResponse>, TempDir) {
-        let dir = tempdir().expect("temp dir is created");
-        let (task_tx, task_rx) = unbounded();
-        let (res_tx, res_rx) = unbounded();
-        start(task_rx, res_tx);
-        let task = CommandTask {
-            program: PathBuf::from(program),
-            args: args.iter().map(OsString::from).collect(),
-            dir: Some(dir.path().to_path_buf()),
-            mode,
-        };
-        task_tx.send(task).expect("runner thread is running");
+        let (cmd_tx, res_rx, dir) = start_runner();
+        let task = make_task(program, args, dir.path(), mode);
+        cmd_tx
+            .send(RunnerCommand::Run(task))
+            .expect("runner thread is running");
         (res_rx, dir)
     }
 
@@ -409,14 +568,20 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn overlay_mode_captures_stdout_and_stderr() {
-        let (res_rx, _dir) = run_mode(
+        let (cmd_tx, res_rx, dir) = start_runner();
+        let task = make_task(
             "sh",
             &["-c", "echo out; echo err >&2"],
+            dir.path(),
             CommandMode::Overlay {
                 id: 7,
                 tab_id: Some(1),
             },
         );
+        cmd_tx
+            .send(RunnerCommand::Run(task))
+            .expect("runner thread is running");
+
         match res_rx.recv_timeout(TIMEOUT) {
             Ok(WorkerResponse::CommandOutput {
                 id,
@@ -435,6 +600,35 @@ mod tests {
             }
             other => panic!("expected command output, got {other:?}"),
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn overlay_mode_cancel_stops_running_command() {
+        let (cmd_tx, res_rx, dir) = start_runner();
+        let task = make_task(
+            "sh",
+            &["-c", "sleep 0.4 && echo survived"],
+            dir.path(),
+            CommandMode::Overlay {
+                id: 42,
+                tab_id: Some(0),
+            },
+        );
+        cmd_tx
+            .send(RunnerCommand::Run(task))
+            .expect("runner thread is running");
+        cmd_tx
+            .send(RunnerCommand::Cancel(42))
+            .expect("runner thread is running");
+
+        assert_eq!(
+            res_rx.recv_timeout(Duration::from_millis(600)).err(),
+            Some(RecvTimeoutError::Timeout)
+        );
+
+        drop(cmd_tx);
+        assert_nothing_sent(&res_rx);
     }
 
     #[test]

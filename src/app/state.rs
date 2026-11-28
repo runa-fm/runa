@@ -594,7 +594,7 @@ impl AppState {
             return self.handle_input_mode(workers, key);
         }
 
-        if let Some(res) = self.handle_modal_overlay_keypress(&key) {
+        if let Some(res) = self.handle_modal_overlay_keypress(&key, workers) {
             return res;
         }
 

@@ -159,6 +159,13 @@ impl OverlayStack {
         })
     }
 
+    pub(crate) fn running_command_output_id(&self) -> Option<u64> {
+        self.overlays.iter().find_map(|o| match o {
+            Overlay::CommandOutput(out) if out.running() => Some(out.id()),
+            _ => None,
+        })
+    }
+
     pub(crate) fn take_shared(
         &mut self,
         notification_time: &mut Option<Instant>,

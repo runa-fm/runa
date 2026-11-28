@@ -539,7 +539,7 @@ default = "nvim"
 # lazygit = { keys = "<m-g>", cmd = "lazygit" }
 # extract = { keys = "x", cmd = ["7z", "x", "-o{unused_stem}", "{path}"], terminal = false }
 # status  = { keys = "<m-s>", cmd = ["git", "status"], output = "overlay" }
-# push    = { keys = "<m-p>", cmd = ["git", "push"], output = "message" }
+# branch  = { keys = "<m-b>", cmd = ["git", "status", "-sb"], output = "message" }
 
 # ===========================
 #          KEYBINDS

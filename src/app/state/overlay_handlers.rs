@@ -17,16 +17,14 @@ impl AppState {
     pub(in crate::app) fn handle_modal_overlay_keypress(
         &mut self,
         key: &KeyEvent,
+        workers: &Workers,
     ) -> Option<KeypressResult> {
         if !self.overlays().is_open(OverlayKind::CommandOutput) {
             return None;
         }
 
         match key.code {
-            Esc | Char('q') => {
-                self.actions.scroll().reset();
-                self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
-            }
+            Esc | Char('q') => self.close_command_output(workers),
             Up | Char('k') => self.actions.scroll().scroll_up(),
             Down | Char('j') => self.actions.scroll().scroll_down(),
             Left | Char('h') => self.actions.scroll().scroll_left(4),
@@ -50,9 +48,16 @@ impl AppState {
         Some(KeypressResult::Consumed)
     }
 
-    pub(super) fn open_command_output(&mut self, id: u64, title: String) {
+    pub(crate) fn close_command_output(&mut self, workers: &Workers) {
+        if let Some(id) = self.overlays.running_command_output_id() {
+            workers.cancel_command(id);
+        }
         self.actions.scroll().reset();
         self.overlays_mut().remove_kind(OverlayKind::CommandOutput);
+    }
+
+    pub(super) fn open_command_output(&mut self, id: u64, title: String, workers: &Workers) {
+        self.close_command_output(workers);
         self.overlays_mut().push(Overlay::CommandOutput(Box::new(
             CommandOutputOverlay::new_running(id, title),
         )));

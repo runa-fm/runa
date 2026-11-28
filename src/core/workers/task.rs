@@ -89,6 +89,11 @@ pub(crate) struct CommandTask {
     pub(crate) mode: CommandMode,
 }
 
+pub(crate) enum RunnerCommand {
+    Run(CommandTask),
+    Cancel(u64),
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct TrashEntry {
     pub(crate) item: trash::TrashItem,
