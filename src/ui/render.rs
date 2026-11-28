@@ -305,7 +305,7 @@ fn render_header(frame: &mut Frame, app: &AppState, area: Rect) {
     let display_cfg = cfg.display();
     let theme_cfg = cfg.theme();
     let path_str = if app.is_trash() {
-        "trash://"
+        "trash:/"
     } else {
         app.nav().display_path()
     };
