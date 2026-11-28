@@ -509,15 +509,6 @@ pub(crate) fn rename_with_fallback(src: &Path, dst: &Path, is_dir: bool) -> io::
     }
 }
 
-#[cfg(any(
-    target_os = "windows",
-    all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    )
-))]
 fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<WorkerResponse>) {
     match op {
         TrashOperation::List => send_trash_list(res_tx, tab_id),
@@ -530,7 +521,7 @@ fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<Wo
                 .into_iter()
                 .collect();
 
-            match trash::os_limited::restore_all(items) {
+            match trash_os::restore_all(items) {
                 Ok(()) => {
                     let label = if count == 1 { "item" } else { "items" };
                     let _ =
@@ -541,18 +532,6 @@ fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<Wo
                         modified_dirs,
                     });
                 }
-                Err(trash::Error::RestoreCollision { path, .. }) => {
-                    let _ = res_tx.send(WorkerResponse::Error(format!(
-                        "Restore failed: '{}' already exists",
-                        path.display()
-                    )));
-                }
-                Err(trash::Error::RestoreTwins { path, .. }) => {
-                    let _ = res_tx.send(WorkerResponse::Error(format!(
-                        "Restore failed: multiple items share '{}'",
-                        path.display()
-                    )));
-                }
                 Err(e) => {
                     let _ = res_tx.send(WorkerResponse::Error(format!("Restore failed: {e}")));
                 }
@@ -561,7 +540,7 @@ fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<Wo
         }
         TrashOperation::Purge(items) => {
             let count = items.len();
-            match trash::os_limited::purge_all(items) {
+            match trash_os::purge_all(items) {
                 Ok(()) => {
                     let label = if count == 1 { "item" } else { "items" };
                     let _ = res_tx.send(WorkerResponse::Message(format!(
@@ -574,60 +553,29 @@ fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<Wo
             }
             send_trash_list(res_tx, tab_id);
         }
-        TrashOperation::Empty => {
-            match trash::os_limited::list().and_then(trash::os_limited::purge_all) {
-                Ok(()) => {
-                    let _ = res_tx.send(WorkerResponse::Message("Trash emptied".to_string()));
-                    let _ = res_tx.send(WorkerResponse::TrashLoaded {
-                        items: Arc::default(),
-                        supported: true,
-                        tab_id,
-                    });
-                }
-                Err(e) => {
-                    let _ = res_tx.send(WorkerResponse::Error(format!("Empty trash failed: {e}")));
-                    send_trash_list(res_tx, tab_id);
-                }
+        TrashOperation::Empty => match trash_os::empty() {
+            Ok(()) => {
+                let _ = res_tx.send(WorkerResponse::Message("Trash emptied".to_string()));
+                let _ = res_tx.send(WorkerResponse::TrashLoaded {
+                    items: Arc::default(),
+                    supported: trash_os::SUPPORTED,
+                    tab_id,
+                });
             }
-        }
+            Err(e) => {
+                let _ = res_tx.send(WorkerResponse::Error(format!("Empty trash failed: {e}")));
+                send_trash_list(res_tx, tab_id);
+            }
+        },
     }
 }
 
-#[cfg(any(
-    target_os = "windows",
-    all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    )
-))]
 fn send_trash_list(res_tx: &Sender<WorkerResponse>, tab_id: Option<usize>) {
-    match trash::os_limited::list() {
-        Ok(raw_items) => {
-            let mut entries: Vec<TrashEntry> = raw_items
-                .into_iter()
-                .map(|item| {
-                    let size = trash::os_limited::metadata(&item).ok().map(|m| m.size);
-                    let name_str = item.name.to_string_lossy().into_owned();
-                    TrashEntry {
-                        item,
-                        size,
-                        name_str,
-                    }
-                })
-                .collect();
-
-            entries.sort_by(|a, b| {
-                b.item
-                    .time_deleted
-                    .cmp(&a.item.time_deleted)
-                    .then_with(|| a.name_str.cmp(&b.name_str))
-            });
-
+    match trash_os::list() {
+        Ok(entries) => {
             let _ = res_tx.send(WorkerResponse::TrashLoaded {
                 items: Arc::from(entries),
-                supported: true,
+                supported: trash_os::SUPPORTED,
                 tab_id,
             });
         }
@@ -637,26 +585,83 @@ fn send_trash_list(res_tx: &Sender<WorkerResponse>, tab_id: Option<usize>) {
     }
 }
 
-#[cfg(not(any(
-    target_os = "windows",
-    all(
-        unix,
-        not(target_os = "macos"),
-        not(target_os = "ios"),
-        not(target_os = "android")
-    )
-)))]
-fn handle_trash_op(op: TrashOperation, tab_id: Option<usize>, res_tx: &Sender<WorkerResponse>) {
-    if !matches!(op, TrashOperation::List) {
-        let _ = res_tx.send(WorkerResponse::Error(
-            "Trash management is not supported on this OS".to_string(),
-        ));
+#[cfg(not(target_os = "macos"))]
+mod trash_os {
+    use super::TrashEntry;
+
+    pub(super) const SUPPORTED: bool = true;
+
+    pub(super) fn list() -> Result<Vec<TrashEntry>, String> {
+        let mut entries: Vec<TrashEntry> = trash::os_limited::list()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .map(|item| {
+                let size = trash::os_limited::metadata(&item).ok().map(|m| m.size);
+                let name_str = item.name.to_string_lossy().into_owned();
+                TrashEntry {
+                    item,
+                    size,
+                    name_str,
+                }
+            })
+            .collect();
+
+        entries.sort_by(|a, b| {
+            b.item
+                .time_deleted
+                .cmp(&a.item.time_deleted)
+                .then_with(|| a.name_str.cmp(&b.name_str))
+        });
+
+        Ok(entries)
     }
-    let _ = res_tx.send(WorkerResponse::TrashLoaded {
-        items: Arc::default(),
-        supported: false,
-        tab_id,
-    });
+
+    pub(super) fn restore_all(items: Vec<trash::TrashItem>) -> Result<(), String> {
+        trash::os_limited::restore_all(items).map_err(|e| match e {
+            trash::Error::RestoreCollision { path, .. } => {
+                format!("'{}' already exists", path.display())
+            }
+            trash::Error::RestoreTwins { path, .. } => {
+                format!("multiple items share '{}'", path.display())
+            }
+            other => other.to_string(),
+        })
+    }
+
+    pub(super) fn purge_all(items: Vec<trash::TrashItem>) -> Result<(), String> {
+        trash::os_limited::purge_all(items).map_err(|e| e.to_string())
+    }
+
+    pub(super) fn empty() -> Result<(), String> {
+        trash::os_limited::list()
+            .and_then(trash::os_limited::purge_all)
+            .map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(target_os = "macos")]
+mod trash_os {
+    use super::TrashEntry;
+
+    pub(super) const SUPPORTED: bool = false;
+
+    const UNSUPPORTED: &str = "Trash management is not supported on macOS";
+
+    pub(super) fn list() -> Result<Vec<TrashEntry>, String> {
+        Ok(Vec::new())
+    }
+
+    pub(super) fn restore_all(_items: Vec<trash::TrashItem>) -> Result<(), String> {
+        Err(UNSUPPORTED.to_string())
+    }
+
+    pub(super) fn purge_all(_items: Vec<trash::TrashItem>) -> Result<(), String> {
+        Err(UNSUPPORTED.to_string())
+    }
+
+    pub(super) fn empty() -> Result<(), String> {
+        Err(UNSUPPORTED.to_string())
+    }
 }
 
 #[cfg(test)]
