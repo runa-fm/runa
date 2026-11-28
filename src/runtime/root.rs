@@ -38,7 +38,7 @@ pub(crate) struct RunaRoot {
 
 impl RunaRoot {
     #[inline]
-    pub(crate) fn new(container: AppContainer, workers: Workers) -> Self {
+    pub(super) fn new(container: AppContainer, workers: Workers) -> Self {
         Self {
             container,
             clipboard: Clipboard::default(),
@@ -49,7 +49,7 @@ impl RunaRoot {
         }
     }
 
-    pub(crate) fn tick(&mut self) -> bool {
+    pub(super) fn tick(&mut self) -> bool {
         let mut changed = self.update();
         changed |= self.container.current_mut().process_timers(&self.workers);
 
@@ -64,7 +64,7 @@ impl RunaRoot {
         changed
     }
 
-    pub(crate) fn handle_keypress(&mut self, key: KeyEvent) -> KeypressResult {
+    pub(super) fn handle_keypress(&mut self, key: KeyEvent) -> KeypressResult {
         let result =
             self.container
                 .current_mut()
@@ -85,7 +85,7 @@ impl RunaRoot {
         result
     }
 
-    pub(crate) fn render(&mut self, frame: &mut Frame) {
+    pub(super) fn render(&mut self, frame: &mut Frame) {
         let app = self.container.current_mut();
         let layout = ui::frame_layout(frame.area(), app);
         app.update_layout_metrics(&self.workers, layout.metrics());
@@ -98,7 +98,7 @@ impl RunaRoot {
         );
     }
 
-    pub(crate) fn reload_ui(&mut self, writer: &mut impl io::Write) -> io::Result<bool> {
+    pub(super) fn reload_ui(&mut self, writer: &mut impl io::Write) -> io::Result<bool> {
         if !self
             .ui_reload_throttler
             .can_trigger(timings::throttle::UI_RELOAD)

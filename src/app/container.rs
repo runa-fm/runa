@@ -16,8 +16,22 @@ pub(crate) enum AppContainer {
 }
 
 impl AppContainer {
-    pub(crate) fn create_tabs(tabs: Vec<AppState>) -> Self {
-        Self::Tabs(Box::new(TabManager::from_vec(tabs)))
+    pub(crate) fn from_states(mut states: Vec<AppState>, workers: &Workers) -> Option<Self> {
+        if states.is_empty() {
+            return None;
+        }
+
+        for (i, state) in states.iter_mut().enumerate() {
+            state.set_tab_id(i);
+        }
+
+        states[0].initialize(workers, None);
+
+        Some(if states.len() == 1 {
+            Self::Single(Box::new(states.remove(0)))
+        } else {
+            Self::Tabs(Box::new(TabManager::from_vec(states)))
+        })
     }
 
     /// Returns the active app state, the single one or the current tab.
