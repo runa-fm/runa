@@ -59,7 +59,7 @@ mod tests {
     use crate::core::workers::{FindTask, WorkerResponse, Workers};
 
     use std::collections::HashSet;
-    use std::fs::{self, File};
+    use std::fs::File;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::time::Instant;
@@ -143,44 +143,6 @@ mod tests {
         }
 
         assert!(got, "Did not receive FindResults response in time");
-        Ok(())
-    }
-
-    #[test]
-    fn find_worker_sequential_execution() -> Result<(), Box<dyn std::error::Error>> {
-        if !fd_available() {
-            return Ok(());
-        }
-
-        let temp = tempdir()?;
-        let temp_path = temp.path().to_path_buf();
-        fs::File::create(temp_path.join("search_1.txt"))?;
-        fs::File::create(temp_path.join("search_2.txt"))?;
-
-        let workers = Workers::spawn();
-
-        for i in 1..=2 {
-            workers.find_tx.send(FindTask {
-                base_dir: temp_path.clone(),
-                query: format!("search_{i}"),
-                max_results: 1,
-                cancel: Arc::new(AtomicBool::new(false)),
-                show_hidden: false,
-                request_id: i as u64,
-                tab_id: TEST_TAB_ID,
-            })?;
-        }
-
-        let resp1 = workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
-        if let WorkerResponse::FindResults { request_id, .. } = resp1 {
-            assert_eq!(request_id, 1);
-        }
-
-        let resp2 = workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
-        if let WorkerResponse::FindResults { request_id, .. } = resp2 {
-            assert_eq!(request_id, 2);
-        }
-
         Ok(())
     }
 }

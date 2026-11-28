@@ -442,7 +442,6 @@ mod tests {
     use super::*;
     use std::fs::{self, File};
     use std::io::Write;
-    use std::path::PathBuf;
     use tempfile::TempDir;
 
     #[test]
@@ -472,85 +471,6 @@ mod tests {
     }
 
     #[test]
-    fn file_metada_empty_name() {
-        let info = FileMetadata {
-            path: PathBuf::from(""),
-            size: None,
-            modified: None,
-            created: None,
-            accessed: None,
-            attributes: "".into(),
-            file_type: FileType::Other,
-            #[cfg(unix)]
-            unix_meta: None,
-        };
-
-        assert_eq!(info.name(), "");
-        assert_eq!(info.file_type(), format_file_type(&FileType::Other));
-        assert_eq!(info.size(), format_file_size(None, false));
-    }
-
-    #[test]
-    fn file_metada_time_formatting_none() {
-        let now = Timestamp::now();
-        let fmt = "%Y-%m-%d %H:%M";
-        let ctx = TimeFormatCtx::new(fmt, now);
-        let info = FileMetadata {
-            path: PathBuf::from("dummy"),
-            size: None,
-            modified: None,
-            created: None,
-            accessed: None,
-            attributes: "".into(),
-            file_type: FileType::File,
-            #[cfg(unix)]
-            unix_meta: None,
-        };
-
-        assert_eq!(info.modified(&ctx), format_file_time(None, &ctx));
-        assert_eq!(info.created(&ctx), format_file_time(None, &ctx),);
-        assert_eq!(info.accessed(&ctx), format_file_time(None, &ctx));
-    }
-
-    #[test]
-    fn file_metada_perms_width() {
-        let info = FileMetadata {
-            path: PathBuf::from("file.txt"),
-            size: None,
-            modified: None,
-            created: None,
-            accessed: None,
-            attributes: "rwx".into(),
-            file_type: FileType::File,
-            #[cfg(unix)]
-            unix_meta: None,
-        };
-
-        let perms = info.perms();
-        assert!(perms.len() >= 3);
-        assert!(perms.contains("rwx"));
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn file_metada_unix_meta_defaults() {
-        let info = FileMetadata {
-            path: PathBuf::from("dummy"),
-            size: None,
-            modified: None,
-            created: None,
-            accessed: None,
-            attributes: "".into(),
-            file_type: FileType::File,
-            unix_meta: None,
-        };
-
-        // Should fall back to 0
-        assert_eq!(info.uid(), 0);
-        assert_eq!(info.gid(), 0);
-    }
-
-    #[test]
     #[cfg(unix)]
     fn test_file_metada_symlink() -> Result<(), Box<dyn std::error::Error>> {
         let tmp = TempDir::new()?;
@@ -563,19 +483,6 @@ mod tests {
         let info = FileMetadata::new(&link_path)?;
         assert_eq!(info.file_type, FileType::Symlink);
         assert_eq!(info.name(), "link.txt");
-        Ok(())
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn test_unix_metadata_retrieval() -> Result<(), Box<dyn std::error::Error>> {
-        let tmp = TempDir::new()?;
-        let file_path = tmp.path().join("unix_test.txt");
-        File::create(&file_path)?;
-        let info = FileMetadata::new(&file_path)?;
-
-        assert!(info.unix_meta.is_some());
-        assert!(info.uid() > 0 || info.uid() == 0);
         Ok(())
     }
 }

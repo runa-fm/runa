@@ -298,10 +298,6 @@ mod test_support {
         which::which("fd").is_ok()
     }
 
-    pub(super) fn bat_available() -> bool {
-        which::which("bat").is_ok()
-    }
-
     pub(super) fn test_list_opts() -> DirListOptions {
         DirListOptions {
             dirs_first: true,

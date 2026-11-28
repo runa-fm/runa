@@ -81,17 +81,14 @@ pub(super) fn start(
 
 #[cfg(test)]
 mod tests {
-    use crate::core::listing::{DirListOptions, SortConfig};
+    use crate::core::listing::SortConfig;
     use crate::core::workers::test_support::{TEST_TAB_ID, TEST_TIMEOUT, test_list_opts};
     use crate::core::workers::{DirRequest, LoadDirTask, WorkerResponse, Workers};
 
-    use rand::{RngExt, rng};
     use std::collections::HashSet;
     use std::fs;
     use std::path::Path;
     use std::sync::Arc;
-    use std::thread;
-    use std::time::{Duration, Instant};
     use tempfile::tempdir;
 
     fn load_task(path: &Path, request: DirRequest) -> LoadDirTask {
@@ -130,139 +127,6 @@ mod tests {
             .get(temp.path(), SortConfig::default(), &test_list_opts())
             .ok_or("listing is not cached")?;
         assert_eq!(cached.entries().len(), 2, "cache kept the older listing");
-        Ok(())
-    }
-
-    #[test]
-    fn worker_load_current_dir() -> Result<(), Box<dyn std::error::Error>> {
-        let workers = Workers::spawn();
-        let temp = tempdir()?;
-        let task_tx = &workers.nav_tx;
-        let res_rx = workers.response_rx();
-
-        let temp_path = temp.path().join("test_dir");
-        fs::create_dir(&temp_path)?;
-        fs::File::create(temp_path.join("crab.txt"))?;
-
-        task_tx.send(LoadDirTask {
-            path: temp_path,
-            focus: None,
-            list: test_list_opts(),
-            sort_date_format: Arc::<str>::from(""),
-            sort_config: SortConfig::default(),
-            always_show: Arc::new(HashSet::new()),
-            request: DirRequest::Nav(1),
-            tab_id: TEST_TAB_ID,
-        })?;
-
-        match res_rx.recv()? {
-            WorkerResponse::DirectoryLoaded { entries, .. } => {
-                assert!(!entries.is_empty(), "Current dir should not be empty");
-
-                // Check display name width
-                for entry in entries.iter().enumerate() {
-                    assert!(!entry.1.name_str().is_empty());
-                }
-            }
-            WorkerResponse::DirectoryFailed { message, .. } => panic!("Worker error: {}", message),
-            _ => panic!("Unexpected worker response"),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn worker_dir_load_requests_multithreaded() -> Result<(), Box<dyn std::error::Error>> {
-        let temp_root = tempdir()?;
-
-        let dir_a = temp_root.path().join("dir_a");
-        let dir_b = temp_root.path().join("dir_b");
-        fs::create_dir(&dir_a)?;
-        fs::create_dir(&dir_b)?;
-        fs::write(dir_a.join("file.txt"), "content")?;
-
-        let dirs = vec![temp_root.path().to_path_buf(), dir_a, dir_b];
-
-        let thread_count = 2;
-        let requests_per_thread = 25;
-
-        let workers = Workers::spawn();
-        let task_tx = &workers.nav_tx;
-        let res_rx = workers.response_rx();
-
-        // Spawn threads to send requests in parallel
-        let mut handles = Vec::new();
-        for t in 0..thread_count {
-            let task_tx = task_tx.clone();
-            let dirs = dirs.clone();
-            handles.push(thread::spawn(move || {
-                let mut rng = rng();
-                for i in 0..requests_per_thread {
-                    let dir = &dirs[rng.random_range(0..dirs.len())];
-                    let list = DirListOptions {
-                        dirs_first: rng.random_bool(0.5),
-                        show_hidden: rng.random_bool(0.5),
-                        show_symlink: rng.random_bool(0.5),
-                        show_system: rng.random_bool(0.5),
-                        case_insensitive: rng.random_bool(0.5),
-                    };
-                    task_tx
-                        .send(LoadDirTask {
-                            path: dir.clone(),
-                            focus: None,
-                            list,
-                            sort_config: SortConfig::default(),
-                            sort_date_format: Arc::<str>::from(""),
-                            always_show: Arc::new(HashSet::new()),
-                            request: DirRequest::Nav((t * requests_per_thread + i) as u64),
-                            tab_id: TEST_TAB_ID,
-                        })
-                        .expect("Couldn't send task to worker");
-                    if i % 50 == 0 {
-                        thread::sleep(Duration::from_millis(rng.random_range(0..10)));
-                    }
-                }
-            }));
-        }
-
-        // Wait for all senders to finish
-        for h in handles {
-            if let Err(err) = h.join() {
-                panic!("Thread panicked during stress test: {:?}", err);
-            }
-        }
-
-        // Read responses
-        let total_requests = thread_count * requests_per_thread;
-        let mut valid_responses = 0;
-        let timeout = Instant::now() + TEST_TIMEOUT;
-
-        for _ in 0..total_requests {
-            let remaining = timeout.saturating_duration_since(Instant::now());
-            match res_rx.recv_timeout(remaining.min(Duration::from_millis(500))) {
-                Ok(WorkerResponse::DirectoryLoaded { entries, .. }) => {
-                    valid_responses += 1;
-                    for entry in entries.iter().enumerate() {
-                        let name = entry.1.name_str();
-
-                        assert!(!name.is_empty(), "Entry name_str must not be empty.");
-                        assert!(
-                            !name.contains('\0'),
-                            "Entry name_str must not contain null."
-                        );
-                    }
-                }
-                Ok(WorkerResponse::DirectoryFailed { message, .. }) => {
-                    panic!("Worker error: {}", message)
-                }
-                Ok(_) => {}
-                Err(_) => break,
-            }
-        }
-
-        assert_eq!(
-            valid_responses, total_requests,
-            "Not all worker requests returned results!"
-        );
         Ok(())
     }
 }

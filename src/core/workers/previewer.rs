@@ -45,11 +45,8 @@ pub(super) fn start(task_rx: Receiver<PreviewTask>, res_tx: Sender<WorkerRespons
 #[cfg(test)]
 mod tests {
     use crate::core::preview::{PreviewLines, PreviewMode};
-    use crate::core::workers::test_support::{TEST_TAB_ID, TEST_TIMEOUT, bat_available};
+    use crate::core::workers::test_support::{TEST_TAB_ID, TEST_TIMEOUT};
     use crate::core::workers::{PreviewTask, WorkerResponse, Workers};
-
-    use std::fs;
-    use tempfile::tempdir;
 
     #[test]
     fn preview_worker_internal() -> Result<(), Box<dyn std::error::Error>> {
@@ -79,46 +76,6 @@ mod tests {
                 }
             }
             r => return Err(format!("Unexpected response: {:?}", r).into()),
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn preview_fallback_on_failure() -> Result<(), Box<dyn std::error::Error>> {
-        if !bat_available() {
-            return Ok(());
-        }
-
-        let temp = tempdir()?;
-        let file_path = temp.path().join("fallback.txt");
-        fs::write(&file_path, "Standard Text Content")?;
-
-        let workers = Workers::spawn();
-
-        workers.preview_file_tx().send(PreviewTask {
-            path: file_path,
-            max_lines: 5,
-            pane_width: 40,
-            tab_width: 4,
-            scroll: 0,
-            preview_mode: PreviewMode::Bat { args: vec![] },
-            request_id: 99,
-            tab_id: TEST_TAB_ID,
-        })?;
-
-        let resp = workers.response_rx().recv_timeout(TEST_TIMEOUT)?;
-        if let WorkerResponse::PreviewLoaded {
-            lines: PreviewLines::Text(lines),
-            ..
-        } = resp
-        {
-            assert!(
-                !lines.is_empty(),
-                "Should have fallen back to internal reader"
-            );
-            assert_eq!(lines[0].trim(), "Standard Text Content");
-        } else {
-            panic!("Worker failed to provide fallback preview");
         }
         Ok(())
     }

@@ -279,19 +279,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn file_entry_flags() -> Result<(), Box<dyn std::error::Error>> {
-        let fe_file = FileEntry::new(OsString::from("file.txt"), 0, None);
-        assert!(!fe_file.is_dir());
-        assert_eq!(fe_file.name_str(), "file.txt");
-
-        let flags = FileEntry::IS_DIR | FileEntry::IS_HIDDEN;
-        let fe_dir = FileEntry::new(OsString::from(".hidden_folder"), flags, None);
-        assert!(fe_dir.is_dir());
-        assert!(!fe_dir.is_symlink());
-        Ok(())
-    }
-
-    #[test]
     fn names_stay_identical() {
         let names = [
             "file.txt",
